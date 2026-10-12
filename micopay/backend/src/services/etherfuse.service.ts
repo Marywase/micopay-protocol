@@ -101,6 +101,8 @@ export interface CreateQuoteParams {
   customerId: string;
   sourceAmount: string;
   walletAddress?: string;
+  /** Comision del partner (MicoPay), hasta 500 bps; Etherfuse la liquida cada mes. */
+  partnerFeeBps?: number;
   quoteAssets:
     | { type: "onramp"; sourceAsset: "MXN"; targetAsset: string }
     | { type: "offramp"; sourceAsset: string; targetAsset: "MXN" };

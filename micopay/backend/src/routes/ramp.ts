@@ -3,7 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { authMiddleware } from '../middleware/auth.middleware.js';
 import { verifyWebhookSignature } from '../lib/webhook-auth.js';
 import db from '../db/schema.js';
-import { UpstreamError, ValidationError, ForbiddenError, NotFoundError } from '../utils/errors.js';
+import { AppError, UpstreamError, ValidationError, ForbiddenError, NotFoundError } from '../utils/errors.js';
 import {
   createQuote,
   createOrder,
@@ -12,6 +12,24 @@ import {
   getCetesIdentifier,
 } from '../services/etherfuse.service.js';
 import { assertKycTierSufficient } from '../services/kyc-gate.service.js';
+import {
+  BRIDGE_SYMBOL,
+  WithdrawNotReadyError,
+  bridgeAmountAfterSlippage,
+  evaluateWithdrawAccount,
+  findStrictSendRoute,
+  fromStroops,
+  loadHorizonAccount,
+  needsDex,
+  parseWithdrawAsset,
+  partnerFeeBps,
+  plainAmount,
+  resolveRampAsset,
+  skipChainChecks,
+  toStroops,
+  type StellarAssetRef,
+  type WithdrawAsset,
+} from '../services/rampWithdraw.service.js';
 
 interface RampUserRow {
   stellar_address: string;
@@ -49,11 +67,152 @@ function ensureEtherfuseConfigured() {
  * "IDOR ramp order"). Orders created before this migration have no row here —
  * fail open for those (log + allow) rather than break in-flight orders.
  */
-async function recordRampOrderOwner(orderId: string, userId: string): Promise<void> {
+async function recordRampOrderOwner(orderId: string, userId: string, quoteId: string | null): Promise<void> {
   await db.execute(
-    'INSERT INTO ramp_orders (order_id, user_id) VALUES ($1, $2)',
-    [orderId, userId],
+    'INSERT INTO ramp_orders (order_id, user_id, quote_id) VALUES ($1, $2, $3)',
+    [orderId, userId, quoteId],
   );
+}
+
+interface RampQuoteRow {
+  quote_id: string;
+  user_id: string;
+  asset: string;
+  send_code: string;
+  send_issuer: string | null;
+  send_max: string;
+  dex_path: StellarAssetRef[];
+  pay_code: string;
+  pay_issuer: string;
+  pay_amount: string;
+  destination_mxn: string;
+}
+
+/**
+ * Lo que el telefono tiene que firmar para un retiro. Sale de lo guardado al
+ * cotizar, no de lo que mande el cliente. `conversion` solo existe cuando el
+ * activo pasa por el DEX (ver rampWithdraw.service.ts).
+ */
+function withdrawInstructions(q: RampQuoteRow) {
+  const payAmount = fromStroops(toStroops(String(q.pay_amount)));
+  const isDex = q.send_code !== q.pay_code || q.send_issuer !== q.pay_issuer;
+  return {
+    asset: q.asset,
+    payment: { code: q.pay_code, issuer: q.pay_issuer, amount: payAmount },
+    conversion: isDex
+      ? {
+          sendAsset: { code: q.send_code, issuer: q.send_issuer },
+          sendMax: fromStroops(toStroops(String(q.send_max))),
+          destAsset: { code: q.pay_code, issuer: q.pay_issuer },
+          destAmount: payAmount,
+          path: q.dex_path,
+        }
+      : null,
+    destinationMxn: String(q.destination_mxn),
+  };
+}
+
+async function updateRampOrderStatus(orderId: string, status: string): Promise<void> {
+  await db.execute(
+    'UPDATE ramp_orders SET status = $2, status_updated_at = NOW() WHERE order_id = $1 AND status IS DISTINCT FROM $2',
+    [orderId, status],
+  );
+}
+
+/**
+ * Cotiza un retiro a MXN. Devuelve el activo y monto exactos que se le pagan a
+ * Etherfuse y, si hace falta, la conversion previa en el DEX.
+ */
+async function quoteWithdraw(params: {
+  userId: string;
+  user: RampUserRow;
+  asset: WithdrawAsset;
+  sourceAmount: string;
+}) {
+  const { userId, user, asset, sourceAmount } = params;
+  const sellAmount = fromStroops(toStroops(sourceAmount));
+
+  let send: StellarAssetRef;
+  let pay: { code: string; issuer: string; identifier: string };
+  let payAmount: string;
+  let path: StellarAssetRef[] = [];
+
+  if (needsDex(asset)) {
+    // Hoy solo XLM. Se cotiza en el activo puente con lo que el DEX entrega
+    // menos el margen; el usuario nunca gasta mas de lo que escribio.
+    send = { code: 'XLM', issuer: null };
+    pay = await resolveRampAsset(user.stellar_address, BRIDGE_SYMBOL);
+    const route = await findStrictSendRoute(send, sellAmount, pay);
+    if (!route) {
+      throw new ValidationError(`No hay liquidez para cambiar ${asset} a ${BRIDGE_SYMBOL} en este momento.`);
+    }
+    payAmount = bridgeAmountAfterSlippage(route.destinationAmount);
+    if (toStroops(payAmount) <= 0n) {
+      throw new ValidationError('El monto es demasiado pequeño para retirar.');
+    }
+    path = route.path;
+  } else {
+    pay = await resolveRampAsset(user.stellar_address, asset);
+    send = { code: pay.code, issuer: pay.issuer };
+    payAmount = sellAmount;
+  }
+
+  let needsBridgeTrustline = false;
+  if (!skipChainChecks()) {
+    const account = await loadHorizonAccount(user.stellar_address);
+    const readiness = evaluateWithdrawAccount(account, {
+      sell: send,
+      amount: sellAmount,
+      bridge: needsDex(asset) ? pay : undefined,
+    });
+    if (!readiness.ready) throw new WithdrawNotReadyError(readiness, asset);
+    needsBridgeTrustline = readiness.needsBridgeTrustline;
+  }
+
+  const quote = await createQuote({
+    quoteId: randomUUID(),
+    customerId: user.etherfuse_customer_id!,
+    sourceAmount: plainAmount(payAmount),
+    walletAddress: user.stellar_address,
+    partnerFeeBps: partnerFeeBps(),
+    quoteAssets: { type: 'offramp', sourceAsset: pay.identifier, targetAsset: 'MXN' },
+  });
+
+  const row: RampQuoteRow = {
+    quote_id: quote.quoteId,
+    user_id: userId,
+    asset,
+    send_code: send.code,
+    send_issuer: send.issuer,
+    send_max: sellAmount,
+    dex_path: path,
+    pay_code: pay.code,
+    pay_issuer: pay.issuer,
+    pay_amount: payAmount,
+    destination_mxn: quote.destinationAmount,
+  };
+  await db.execute(
+    `INSERT INTO ramp_quotes
+       (quote_id, user_id, asset, send_code, send_issuer, send_max, dex_path,
+        pay_code, pay_issuer, pay_amount, destination_mxn, fee_amount, expires_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11, $12, $13)`,
+    [
+      row.quote_id, userId, asset, send.code, send.issuer, sellAmount, JSON.stringify(path),
+      pay.code, pay.issuer, payAmount, quote.destinationAmount, quote.feeAmount ?? null, quote.expiresAt ?? null,
+    ],
+  );
+
+  return {
+    quoteId: quote.quoteId,
+    type: 'offramp' as const,
+    exchangeRate: quote.exchangeRate,
+    sourceAmount: sellAmount,
+    destinationAmount: quote.destinationAmount,
+    feeAmount: quote.feeAmount,
+    expiresAt: quote.expiresAt,
+    ...withdrawInstructions(row),
+    needsBridgeTrustline,
+  };
 }
 
 async function assertRampOrderOwnership(orderId: string, userId: string, request: { log: { warn: (obj: unknown, msg: string) => void } }): Promise<void> {
@@ -71,14 +230,15 @@ async function assertRampOrderOwnership(orderId: string, userId: string, request
 }
 
 export async function rampRoutes(app: FastifyInstance): Promise<void> {
-  // Get quote: MXN->CETES (onramp) or CETES->MXN (offramp).
-  app.post<{ Body: { type: 'onramp' | 'offramp'; sourceAmount: string } }>(
+  // Get quote: MXN->CETES (onramp), or asset->MXN (offramp). `asset` is one of
+  // USDC, CETES, MEXe, XLM; without it the offramp sells CETES (CETESScreen).
+  app.post<{ Body: { type: 'onramp' | 'offramp'; sourceAmount: string; asset?: string } }>(
     '/defi/ramp/quote',
     { preHandler: [authMiddleware] },
     async (request: any) => {
       ensureEtherfuseConfigured();
 
-      const { type, sourceAmount } = request.body ?? {};
+      const { type, sourceAmount, asset: rawAsset } = request.body ?? {};
       if (!type || !sourceAmount) {
         throw new ValidationError('type y sourceAmount son requeridos');
       }
@@ -86,12 +246,17 @@ export async function rampRoutes(app: FastifyInstance): Promise<void> {
       if (isNaN(amount) || amount <= 0) {
         throw new ValidationError('sourceAmount invalido');
       }
+      const asset = type === 'offramp' ? parseWithdrawAsset(rawAsset ?? 'CETES') : null;
+      if (type === 'offramp' && !asset) {
+        throw new ValidationError('asset invalido');
+      }
 
       const user = await requireOnboardedUser(request.user.id);
 
       // #314: tiered KYC gate. Onramp amount is already MXN; offramp's
-      // sourceAmount is CETES units, so amountMxn is left undefined there
-      // (falls back to the operation's base tier requirement).
+      // sourceAmount is in the asset being sold, so amountMxn is left undefined
+      // there (falls back to the operation's base tier requirement). Passing the
+      // quoted MXN here would count every re-quote toward the monthly volume.
       await assertKycTierSufficient({
         userId: request.user.id,
         operationType: type === 'onramp' ? 'cash_in' : 'cash_out',
@@ -99,16 +264,18 @@ export async function rampRoutes(app: FastifyInstance): Promise<void> {
       });
 
       try {
+        if (type === 'offramp') {
+          return await quoteWithdraw({ userId: request.user.id, user, asset: asset!, sourceAmount: String(sourceAmount) });
+        }
+
         const cetesIdentifier = await getCetesIdentifier(user.stellar_address);
         const quote = await createQuote({
           quoteId: randomUUID(),
           customerId: user.etherfuse_customer_id!,
           sourceAmount,
           walletAddress: user.stellar_address,
-          quoteAssets:
-            type === 'onramp'
-              ? { type: 'onramp', sourceAsset: 'MXN', targetAsset: cetesIdentifier }
-              : { type: 'offramp', sourceAsset: cetesIdentifier, targetAsset: 'MXN' },
+          partnerFeeBps: partnerFeeBps(),
+          quoteAssets: { type: 'onramp', sourceAsset: 'MXN', targetAsset: cetesIdentifier },
         });
 
         return {
@@ -121,6 +288,8 @@ export async function rampRoutes(app: FastifyInstance): Promise<void> {
           expiresAt: quote.expiresAt,
         };
       } catch (err: any) {
+        // Validation, readiness and Horizon errors already carry a user message.
+        if (err instanceof AppError) throw err;
         throw new UpstreamError(
           'ETHERFUSE_QUOTE_FAILED',
           'No se pudo obtener la cotización. Intenta de nuevo.',
@@ -145,18 +314,28 @@ export async function rampRoutes(app: FastifyInstance): Promise<void> {
       const user = await requireOnboardedUser(request.user.id);
       const orderId = randomUUID();
 
+      // Withdrawals quoted by quoteWithdraw: the quote must belong to the caller,
+      // and anchor mode is mandatory (the phone builds the payment itself).
+      const stored = await db.getOne<RampQuoteRow>('SELECT * FROM ramp_quotes WHERE quote_id = $1', [quoteId]);
+      if (stored && stored.user_id !== request.user.id) {
+        throw new ForbiddenError('Esta cotización no es tuya');
+      }
+
       try {
         const result = await createOrder({
           orderId,
           quoteId,
           bankAccountId: user.etherfuse_bank_account_id!,
           publicKey: user.stellar_address,
-          useAnchor,
+          useAnchor: stored ? true : useAnchor,
         });
 
-        await recordRampOrderOwner(orderId, request.user.id);
+        await recordRampOrderOwner(orderId, request.user.id, stored?.quote_id ?? null);
 
-        return 'offramp' in result ? result.offramp : result.onramp;
+        if ('offramp' in result) {
+          return stored ? { ...result.offramp, ...withdrawInstructions(stored) } : result.offramp;
+        }
+        return result.onramp;
       } catch (err: any) {
         throw new UpstreamError(
           'ETHERFUSE_ORDER_FAILED',
@@ -176,6 +355,7 @@ export async function rampRoutes(app: FastifyInstance): Promise<void> {
       await assertRampOrderOwnership(orderId, request.user.id, request);
       try {
         const order = await getOrder(orderId);
+        await updateRampOrderStatus(orderId, order.status);
         return { orderId: order.orderId, status: order.status, type: order.orderType };
       } catch (err: any) {
         if (err.message === 'ORDER_NOT_FOUND') {
@@ -210,6 +390,21 @@ export async function rampRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
+  // The caller's recent ramp orders, newest first, with the status last seen.
+  app.get('/defi/ramp/orders', { preHandler: [authMiddleware] }, async (request: any) => {
+    const orders = await db.getMany(
+      `SELECT o.order_id, o.status, o.created_at, o.status_updated_at,
+              q.asset, q.send_max, q.pay_code, q.pay_amount, q.destination_mxn
+         FROM ramp_orders o
+         LEFT JOIN ramp_quotes q ON q.quote_id = o.quote_id
+        WHERE o.user_id = $1
+        ORDER BY o.created_at DESC
+        LIMIT 20`,
+      [request.user.id],
+    );
+    return { orders };
+  });
+
   // Webhook endpoints (Etherfuse calls these on order/KYC status changes).
   // One URL per event type — each POST /ramp/webhook subscription gets its
   // own signing secret, and the X-Signature header alone doesn't tell you
@@ -222,6 +417,22 @@ export async function rampRoutes(app: FastifyInstance): Promise<void> {
       return reply.status(401).send({ error: `webhook signature verification failed: ${error}` });
     }
     request.log.info({ body: request.body }, 'Etherfuse order_updated webhook');
+
+    // The docs don't pin down the payload shape, and Etherfuse says to re-read
+    // the order for the authoritative state. Only orders we created.
+    const body = request.body as any;
+    const orderId: unknown = body?.orderId ?? body?.order_id ?? body?.data?.orderId ?? body?.order?.orderId;
+    if (typeof orderId === 'string') {
+      const known = await db.getOne<{ order_id: string }>('SELECT order_id FROM ramp_orders WHERE order_id = $1', [orderId]);
+      if (known) {
+        try {
+          const order = await getOrder(orderId);
+          await updateRampOrderStatus(orderId, order.status);
+        } catch (err: any) {
+          request.log.warn({ order_id: orderId, err: err?.message, category: 'ramp' }, '[ramp] Could not refresh order from webhook');
+        }
+      }
+    }
     return reply.status(200).send({ received: true });
   });
 

@@ -22,7 +22,7 @@ import { AppError, UpstreamError } from '../utils/errors.js';
  */
 
 /** Reserva base de la red, en XLM (protocolo actual). */
-const BASE_RESERVE_XLM = 0.5;
+export const BASE_RESERVE_XLM = 0.5;
 /**
  * Margen para la comision de `release`. Las invocaciones de Soroban cobran
  * recursos ademas de la base; el reembolso administrativo ofrece hasta 0.1 XLM
@@ -34,9 +34,10 @@ export type ReceiverReadiness =
   | { ready: true }
   | { ready: false; reason: 'account_not_found' | 'insufficient_xlm'; requiredXlm?: number; spendableXlm?: number };
 
-interface HorizonBalance {
+export interface HorizonBalance {
   asset_type: string;
   asset_code?: string;
+  asset_issuer?: string;
   balance: string;
   selling_liabilities?: string;
 }
@@ -56,14 +57,19 @@ export interface HorizonAccount {
  * codigo y es de otro emisor, la app la detecta al liberar; aqui solo se evita
  * crear operaciones que no pueden terminar por falta de cuenta o de XLM.
  */
-export function evaluateReceiverAccount(account: HorizonAccount | null, assetCode: string): ReceiverReadiness {
-  if (!account) return { ready: false, reason: 'account_not_found' };
-
+/** XLM que la cuenta puede gastar sin bajar de su reserva minima. */
+export function spendableXlmOf(account: HorizonAccount): number {
   const native = account.balances.find((b) => b.asset_type === 'native');
   const balance = Number(native?.balance ?? 0);
   const sellingLiabilities = Number(native?.selling_liabilities ?? 0);
   const entries = 2 + account.subentry_count + (account.num_sponsoring ?? 0) - (account.num_sponsored ?? 0);
-  const spendableXlm = balance - entries * BASE_RESERVE_XLM - sellingLiabilities;
+  return balance - entries * BASE_RESERVE_XLM - sellingLiabilities;
+}
+
+export function evaluateReceiverAccount(account: HorizonAccount | null, assetCode: string): ReceiverReadiness {
+  if (!account) return { ready: false, reason: 'account_not_found' };
+
+  const spendableXlm = spendableXlmOf(account);
 
   const code = assetCode.trim().toUpperCase();
   const needsTrustline =
@@ -91,7 +97,7 @@ export function setReceiverReadinessFetchForTests(next: FetchLike | null): void 
   fetchImpl = next ?? ((url, init) => fetch(url, init));
 }
 
-function horizonUrl(): string {
+export function horizonUrl(): string {
   return config.stellarNetwork === 'TESTNET'
     ? 'https://horizon-testnet.stellar.org'
     : 'https://horizon.stellar.org';
