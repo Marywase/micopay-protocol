@@ -418,7 +418,7 @@
     "subtitle": "Discover new ways to use your money",
     "investCetes": "Invest in CETES",
     "cetesRateBadge": "~{{rate}}% annual · Backed by the Mexican government",
-    "cetesDesc": "Buy tokenized CETES directly from your wallet using XLM, USDC or MXNe. Etherfuse custodies them on-chain — sell anytime and get your pesos via SPEI or back to your wallet.",
+    "cetesDesc": "Buy tokenized CETES directly from your wallet using XLM or USDC. Etherfuse custodies them on-chain — sell anytime and get your pesos via SPEI or back to your wallet.",
     "viewCetes": "View available CETES",
     "requestLoan": "Request a loan",
     "blendSubtitle": "Instant liquidity with Blend",

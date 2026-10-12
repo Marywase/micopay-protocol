@@ -418,7 +418,7 @@
     "subtitle": "Descubre nuevas formas de usar tu dinero",
     "investCetes": "Invierte en CETES",
     "cetesRateBadge": "~{{rate}}% anual · Respaldo gobierno MX",
-    "cetesDesc": "Compra CETES tokenizados directamente desde tu wallet usando XLM, USDC o MXNe. Etherfuse los custodia on-chain — puedes venderlos en cualquier momento y recibir tus pesos vía SPEI o de vuelta a tu wallet.",
+    "cetesDesc": "Compra CETES tokenizados directamente desde tu wallet usando XLM o USDC. Etherfuse los custodia on-chain — puedes venderlos en cualquier momento y recibir tus pesos vía SPEI o de vuelta a tu wallet.",
     "viewCetes": "Ver CETES disponibles",
     "requestLoan": "Pide un préstamo",
     "blendSubtitle": "Liquidez instantánea con Blend",

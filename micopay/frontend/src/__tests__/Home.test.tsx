@@ -43,7 +43,7 @@ describe('Home — pending-trades badge', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUseWalletBalance.mockReturnValue({
-      balance: '250.00 MXNe',
+      balance: '250.00 MEXe',
       xlmBalance: '250.00',
       stellarAddress: 'GA7ABCDEF12345',
       loading: false,
@@ -122,7 +122,7 @@ describe('Home — XLM→MXN rate', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUseWalletBalance.mockReturnValue({
-      balance: '250.00 MXNe',
+      balance: '250.00 MEXe',
       xlmBalance: '250.00',
       stellarAddress: 'GA7ABCDEF12345',
       loading: false,
@@ -172,9 +172,9 @@ describe('Home — non-custodial wallet balance states', () => {
     mockGetXlmMxnRate.mockResolvedValue({ rate: 18.42, source: 'coingecko', fetchedAt: '2026-06-25T12:00:00Z' });
   });
 
-  it('shows 0.00 MXNe when the account is not funded (Horizon 404)', async () => {
+  it('shows 0.00 MEXe when the account is not funded (Horizon 404)', async () => {
     mockUseWalletBalance.mockReturnValue({
-      balance: '0.00 MXNe',
+      balance: '0.00 MEXe',
       xlmBalance: '0.00',
       stellarAddress: 'GA7ABCDEF12345',
       loading: false,
@@ -187,7 +187,7 @@ describe('Home — non-custodial wallet balance states', () => {
     render(<Home {...createProps()} />);
 
     await waitFor(() => {
-      expect(screen.getAllByText('0.00 MXNe').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('0.00 MEXe').length).toBeGreaterThanOrEqual(1);
     });
   });
 

@@ -29,7 +29,7 @@ const BlendScreen = ({ onBack }: BlendScreenProps) => {
   const [collateralLoading, setCollateralLoading] = useState(false);
   const [collateralResult, setCollateralResult] = useState<BlendTxResult | null>(null);
   const [borrowAmount, setBorrowAmount] = useState('');
-  const [borrowAsset, setBorrowAsset] = useState<'USDC' | 'MXNe'>('MXNe');
+  const [borrowAsset, setBorrowAsset] = useState<'USDC'>('USDC');
   const [borrowLoading, setBorrowLoading] = useState(false);
   const [borrowResult, setBorrowResult] = useState<BlendTxResult | null>(null);
 
@@ -63,7 +63,7 @@ const BlendScreen = ({ onBack }: BlendScreenProps) => {
   // (docs/AUDIT_MOBILE_MAINNET.md §3: nada de FX literal en el frontend).
   const maxBorrowMxn = usdcMxnRate != null ? maxBorrow * usdcMxnRate : null;
   const healthFactor = borrowResult
-    ? (xlmCollateral * 0.058 * 1.1) / (parseFloat(borrowResult.amount) * (borrowAsset === 'MXNe' ? 0.057 : 1))
+    ? (xlmCollateral * 0.058 * 1.1) / parseFloat(borrowResult.amount)
     : 999;
 
   const handleCollateral = async () => {
@@ -264,7 +264,7 @@ const BlendScreen = ({ onBack }: BlendScreenProps) => {
                   <p className="font-bold text-on-surface">Pedir prestado</p>
                   <p className="text-xs text-on-surface-variant">
                     {collateralResult
-                      ? `Máx ~${borrowAsset === 'MXNe' ? (maxBorrowMxn?.toFixed(0) ?? '—') : maxBorrow.toFixed(2)} ${borrowAsset}`
+                      ? `Máx ~${maxBorrow.toFixed(2)} ${borrowAsset}${maxBorrowMxn != null ? ` (~$${maxBorrowMxn.toFixed(0)} MXN)` : ''}`
                       : 'Deposita garantía primero'}
                   </p>
                 </div>
@@ -272,7 +272,7 @@ const BlendScreen = ({ onBack }: BlendScreenProps) => {
 
               {/* Asset selector */}
               <div className="flex gap-2">
-                {(['MXNe', 'USDC'] as const).map((a) => (
+                {(['USDC'] as const).map((a) => (
                   <button
                     key={a}
                     onClick={() => setBorrowAsset(a)}
@@ -380,7 +380,7 @@ const BlendScreen = ({ onBack }: BlendScreenProps) => {
 
               {/* Asset selector */}
               <div className="flex gap-2">
-                {(['XLM', 'USDC', 'MXNe'] as const).map((a) => (
+                {(['XLM', 'USDC'] as const).map((a) => (
                   <button
                     key={a}
                     onClick={() => setSupplyAsset(a)}

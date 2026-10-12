@@ -31,7 +31,7 @@ interface CETESScreenProps {
 }
 
 type Tab = 'buy' | 'sell';
-type SourceAsset = 'XLM' | 'USDC' | 'MXNe';
+type SourceAsset = 'XLM' | 'USDC';
 type ReceiveMethod = 'wallet' | 'spei';
 type PayMethod = 'wallet' | 'spei';
 type DepositStep = 'quote' | 'instructions' | 'polling';
@@ -718,7 +718,7 @@ const CETESScreen = ({ onBack, onBanco, userToken, showDefi = true, showSpeiRamp
                   {tab === 'buy' ? t('cetes.payWith') : t('cetes.receiveIn')}
                 </label>
                 <div className="flex gap-2">
-                  {(['XLM', 'USDC', 'MXNe'] as SourceAsset[]).map((a) => (
+                  {(['XLM', 'USDC'] as SourceAsset[]).map((a) => (
                     <button
                       key={a}
                       onClick={() => setSourceAsset(a)}

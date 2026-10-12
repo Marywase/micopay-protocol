@@ -11,7 +11,7 @@ export interface TokenBalance {
 }
 
 export interface UseWalletBalanceResult {
-  balance: string | null;       // MXNe formatted (legacy)
+  balance: string | null;       // MEXe formatted (legacy)
   xlmBalance: string | null;    // XLM formatted (legacy)
   stellarAddress: string | null;
   loading: boolean;
@@ -22,7 +22,7 @@ export interface UseWalletBalanceResult {
 }
 
 // Peso-pegged assets: treat 1 token = 1 MXN
-const MXN_PEGGED = new Set(['MXNE', 'MXNe', 'CETES', 'GTOKEN', 'MXN']);
+const MXN_PEGGED = new Set(['MEXE', 'MEXe', 'CETES', 'GTOKEN', 'MXN']);
 
 /**
  * El FX viene del backend (multi-fuente + caché), no de CoinGecko desde el
@@ -101,15 +101,15 @@ export function useWalletBalance(): UseWalletBalanceResult {
 
   // Legacy fields derived from tokens
   const xlmToken = tokens.find((t) => t.code === 'XLM');
-  const mxneToken = tokens.find((t) => t.code === 'MXNe' || t.code === 'MXNE');
+  const mxneToken = tokens.find((t) => t.code === 'MEXe' || t.code === 'MEXE');
 
   const xlmBalance = xlmToken != null
     ? xlmToken.balance.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
     : null;
 
   const balance = mxneToken != null
-    ? mxneToken.balance.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' MXNe'
-    : '0.00 MXNe';
+    ? mxneToken.balance.toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' MEXe'
+    : '0.00 MEXe';
 
   return { balance, xlmBalance, stellarAddress, loading, error, refresh, tokens, usdMxnRate };
 }

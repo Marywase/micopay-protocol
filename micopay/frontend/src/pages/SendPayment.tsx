@@ -26,7 +26,7 @@ const SendPayment = ({ onBack, onDone }: SendPaymentProps) => {
   const { tokens, loading: balLoading } = useWalletBalance();
   const { scan } = useQRScanner();
 
-  const [assetCode, setAssetCode] = useState('MXNe');
+  const [assetCode, setAssetCode] = useState('MEXe');
   const [destination, setDestination] = useState('');
   const [amount, setAmount] = useState('');
   const [memo, setMemo] = useState('');
