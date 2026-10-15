@@ -8,9 +8,19 @@
 
 ## 1. Front construido
 
-El front es una app web hecha con React 19, Vite y TypeScript. Con Capacitor se empaqueta como app Android, que es como la usan hoy los testers. Vive en la carpeta `frontend/` del repositorio y cubre de punta a punta el flujo de retiro (cash-out) del Product Blueprint: el usuario cambia USDC por efectivo con un comercio cercano, sin que ninguno de los dos tenga que confiar primero en el otro.
+El front es una app web hecha con React 19, Vite y TypeScript. Con Capacitor se empaqueta como app Android, que es como la usan hoy los testers. Vive en la carpeta `micopay/frontend/` de este repositorio y cubre de punta a punta el flujo de retiro (cash-out) del Product Blueprint: el usuario cambia USDC por efectivo con un comercio cercano, sin que ninguno de los dos tenga que confiar primero en el otro.
 
-Esta semana no empezamos desde cero. La interfaz viene del prototipo que el equipo ya tenía funcionando en red de prueba. Con ese prototipo hicimos un retiro y un depósito de $500 MXN de punta a punta el 24 de septiembre de 2026, y un ensayo del escrow en USDC el 7 de octubre. El trabajo de la semana fue ordenar ese front contra el MVP del Blueprint, dejarlo en este repositorio y documentarlo.
+Para correrlo contra el backend de testnet (Node.js 20 o superior):
+
+```sh
+cd micopay/frontend
+npm install
+npm run dev -- --mode testnet
+```
+
+y abrir http://localhost:5181.
+
+Esta semana no empezamos desde cero. La interfaz viene del prototipo que el equipo ya tenía funcionando en red de prueba. Con ese prototipo hicimos un retiro y un depósito de $500 MXN de punta a punta el 24 de septiembre de 2026, y un ensayo del escrow en USDC el 7 de octubre. El trabajo de la semana fue ordenar ese front contra el MVP del Blueprint y documentarlo.
 
 **Enlace al front funcionando:** [pendiente: URL de Vercel]
 
@@ -18,7 +28,7 @@ Esta semana no empezamos desde cero. La interfaz viene del prototipo que el equi
 
 La tabla sigue el orden en que una persona recorre la app y lo conecta con los pasos del flujo de usuario del Blueprint (sección 3).
 
-| # | Pantalla (archivo en `frontend/src/pages/`) | Qué ve y hace la persona | Paso del Blueprint |
+| # | Pantalla (archivo en `micopay/frontend/src/pages/`) | Qué ve y hace la persona | Paso del Blueprint |
 | :---: | --- | --- | :---: |
 | 1 | Registro e inicio de sesión (`Register.tsx`, `Login.tsx`) | Crea su cuenta. La llave de su billetera Stellar se genera y se guarda en el teléfono. Antes de continuar, un aviso le pide respaldar su llave secreta y confirmar que lo hizo (`SecretKeyBackupModal`). | 1 |
 | 2 | Inicio (`Home.tsx`) | Ve su saldo, sus intercambios recientes y los botones para retirar o depositar efectivo. | 1 |
@@ -67,7 +77,7 @@ La bandeja muestra las solicitudes que recibe el comercio con su estado (pendien
 
 ### Cómo se conecta con la red y el backend
 
-El front no mueve fondos por su cuenta. Pide al backend la transacción ya armada, la firma con la llave guardada en el teléfono y el backend la envía a Stellar. El escrow es un contrato en Soroban que bloquea, libera o devuelve los USDC según la regla escrita en el contrato. Las direcciones de la red, del contrato y del activo se configuran en `frontend/.env.testnet`, de modo que el mismo código sirve para testnet y, más adelante, para mainnet.
+El front no mueve fondos por su cuenta. Pide al backend la transacción ya armada, la firma con la llave guardada en el teléfono y el backend la envía a Stellar. El escrow es un contrato en Soroban que bloquea, libera o devuelve los USDC según la regla escrita en el contrato. Las direcciones de la red, del contrato y del activo se configuran en `micopay/frontend/.env.testnet`, de modo que el mismo código sirve para testnet y, más adelante, para mainnet.
 
 ### Qué hay en el front que queda fuera del MVP
 
@@ -83,20 +93,26 @@ La app también tiene pantallas para depositar efectivo (cash-in), pagar y cobra
 
 ## 2. Decisión técnica: contratos
 
-**Opción elegida:** [pendiente: A, B o A + B]
+**Opción elegida: A. Contrato propio.**
 
-Según el Blueprint (sección 8), la red se usa para tres cosas: retener los USDC en un escrow que nadie puede tocar, que cada persona controle su propia llave y dejar un historial público de intercambios por comercio. La decisión de esta semana separa dos piezas que antes estaban juntas:
+Según el Blueprint (sección 8), la red se usa para tres cosas: retener los USDC en un escrow que nadie puede tocar, que cada persona controle su propia llave y dejar un historial público de intercambios por comercio. La primera es la regla central del producto y es la que decide esta opción.
 
-**El escrow (lógica del intercambio).** Es la regla central del producto: bloquear los USDC, liberarlos al comercio cuando escanea el QR y devolverlos si vence el plazo. Ya existe un contrato propio en Soroban que hace esto en testnet, en el repositorio del protocolo (`micopay/contracts/escrow`). No conocemos ninguna herramienta del ecosistema que haga esta regla exacta (retención con QR de un solo uso, liberación en persona y devolución por tiempo) sin tener que adaptarla.
+**Qué hace el contrato.** Es un escrow en Soroban con tres operaciones:
 
-**La billetera del usuario (custodia y acceso).** Hoy la llave se genera en el teléfono y el usuario tiene que respaldar una llave secreta. Nuestra investigación marcó ese respaldo como la barrera más fuerte (V-4, V-22): perder la llave es el mayor miedo y el punto donde más gente abandona. En V-22, la recuperación con passkey o biometría (Face ID o huella respaldadas en iCloud o Google) se sintió más segura que una frase semilla. Para esta pieza estamos evaluando dos opciones del ecosistema:
+- **Bloquear:** al firmar la operación, los USDC del usuario quedan retenidos en el contrato junto con el comercio elegido, el monto y un plazo de vencimiento.
+- **Liberar:** cuando el comercio escanea el QR de un solo uso al entregar el efectivo, el contrato le transfiere los USDC. Solo puede liberarse una vez y solo al comercio de esa operación.
+- **Devolver:** si vence el plazo sin entrega, los USDC regresan al usuario sin que nadie tenga que aprobarlo.
+
+Cada intercambio queda registrado en la red con su estado (bloqueado, completado, devuelto), y de ahí sale el historial público del comercio que pide el MVP.
+
+**Por qué hace falta uno propio.** No encontramos una herramienta del ecosistema que haga esta regla exacta: retención atada a un QR de un solo uso, liberación en persona y devolución por tiempo. Adaptar un servicio genérico de pagos o de custodia significaría que un tercero retiene el dinero o que la regla vive en un servidor, y eso rompe la promesa del producto: que ni el usuario ni el comercio tengan que confiar primero en el otro, ni en nosotros. El equipo ya validó esta lógica con un contrato propio en testnet, con el que hicimos un retiro y un depósito de $500 MXN de punta a punta el 24 de septiembre y un ensayo del escrow en USDC el 7 de octubre.
+
+**Qué se descarta.** La opción B para el escrow, por lo anterior. Las herramientas del ecosistema sí tienen lugar en otra pieza, la billetera del usuario, que no define la lógica del intercambio. Nuestra investigación marcó el respaldo de la llave secreta como la barrera más fuerte (V-4, V-22), y para resolverlo evaluamos dos opciones que se integrarían con el contrato propio, no en su lugar:
 
 | Opción | Qué resuelve | Qué falta confirmar |
 | --- | --- | --- |
-| Smart wallets con passkeys (cuentas de contrato en Soroban, por ejemplo con passkey-kit) | Que el usuario entre y recupere su cuenta con la biometría de su teléfono, sin frase semilla. | Compatibilidad con el escrow actual, costo de despliegue por cuenta y soporte en Android con Capacitor. |
-| Pollar (SDK de onboarding y activación de billeteras para Stellar) | Login social o por correo, creación y activación de la cuenta con comisiones patrocinadas, y soporte para passkeys y smart accounts. | Modelo de custodia que usaríamos (propia o co-firmada), soporte para React con Capacitor, autorización para llamar a nuestro contrato de escrow y costo. |
-
-**Por qué y qué se descarta:** [pendiente: escribir cuando el equipo decida. Debe decir cuál opción se eligió para la billetera, por qué se descartó la otra y si se mantiene el contrato propio de escrow.]
+| Smart wallets con passkeys (cuentas de contrato en Soroban, por ejemplo con passkey-kit) | Que el usuario entre y recupere su cuenta con la biometría de su teléfono, sin frase semilla. | Compatibilidad con el escrow, costo de despliegue por cuenta y soporte en Android con Capacitor. |
+| Pollar (SDK de onboarding y activación de billeteras para Stellar) | Login social o por correo, creación y activación de la cuenta con comisiones patrocinadas, y soporte para passkeys y smart accounts. | Modelo de custodia (propia o co-firmada), soporte para React con Capacitor, autorización para llamar al escrow y costo. |
 
 ---
 
@@ -104,9 +120,9 @@ Según el Blueprint (sección 8), la red se usa para tres cosas: retener los USD
 
 | Integrante | Usuario de GitHub | Aporte en esta entrega |
 | --- | --- | --- |
-| Eric Mota Tejeda | [@ericmt-98](https://github.com/ericmt-98) | [pendiente] |
+| Eric Mota Tejeda | [@ericmt-98](https://github.com/ericmt-98) | Autor del prototipo en el que se basa el front y del contrato de escrow. Redactó la decisión técnica. |
 | Raúl Vallejo | [@vallejoraul08-debug](https://github.com/vallejoraul08-debug) | [pendiente] |
-| Anna Medina | [pendiente] | [pendiente] |
+| Anna Medina | [@annapats](https://github.com/annapats) | Integró la documentación de la semana 3 y las capturas de la app Android en testnet, y armó la copia del front con su README en el repositorio del curso (`Micopay/proyectobb101`). |
 | José Alfredo Román Cruz | [pendiente] | [pendiente] |
 
 ---
