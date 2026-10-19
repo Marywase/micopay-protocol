@@ -9,6 +9,7 @@
     "build": "tsc",
     "migrate": "tsx src/db/migrate.ts",
     "e2e": "node --import tsx ../scripts/e2e-test.ts",
+    "test:client-errors": "node --import tsx --test src/tests/clientErrors.test.ts",
     "test:rate-limit": "node --import tsx src/tests/rateLimit.test.ts",
     "test:abuse": "node --import tsx src/tests/abuse.service.test.ts",
     "test:kyc-gate": "node --import tsx src/tests/kyc-gate.service.test.ts",

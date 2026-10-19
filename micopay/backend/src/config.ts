@@ -228,6 +228,8 @@ export const config = {
   eventListenerHealthStaleMs: parseInt(process.env.EVENT_LISTENER_HEALTH_STALE_MS || '30000', 10),
 
   // Rate Limiting
+  clientErrorRateLimitWindowMs: parseInt(process.env.CLIENT_ERROR_RATE_LIMIT_WINDOW_MS || '60000', 10),
+  clientErrorRateLimitMax: parseInt(process.env.CLIENT_ERROR_RATE_LIMIT_MAX || '20', 10),
   authRateLimitWindowMs: parseInt(process.env.AUTH_RATE_LIMIT_WINDOW_MS || '600000', 10), // 10 min
   // Un solo bucket por IP cubre /auth/challenge, /auth/token y /users/register
   // (comparten el store por defecto del middleware). Como cada registro o
