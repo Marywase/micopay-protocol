@@ -32,6 +32,7 @@
     "test:meeting-point": "cross-env MOCK_STELLAR=true SECRET_ENCRYPTION_KEY=0000000000000000000000000000000000000000000000000000000000000000 node --import tsx src/tests/meetingPointPrivacy.test.ts",
     "test:kyc-ledger": "cross-env MOCK_STELLAR=true SECRET_ENCRYPTION_KEY=0000000000000000000000000000000000000000000000000000000000000000 node --import tsx src/tests/kycVolumeLedger.test.ts",
     "test:initiator": "cross-env ALLOW_IN_MEMORY_DB=true MOCK_STELLAR=true SECRET_ENCRYPTION_KEY=0000000000000000000000000000000000000000000000000000000000000000 node --import tsx src/tests/initiatorAttribution.test.ts",
+    "test:trade-updates": "cross-env ALLOW_IN_MEMORY_DB=true MOCK_STELLAR=true SECRET_ENCRYPTION_KEY=0000000000000000000000000000000000000000000000000000000000000000 node --import tsx src/tests/tradeUpdateNotification.test.ts",
     "test:cash-handoff": "cross-env ALLOW_IN_MEMORY_DB=true MOCK_STELLAR=true SECRET_ENCRYPTION_KEY=0000000000000000000000000000000000000000000000000000000000000000 node --import tsx src/tests/cashHandoff.test.ts",
     "test:demo-seed": "node --import tsx src/tests/demoSeedTrades.test.ts",
     "test:trade-asset": "cross-env ALLOW_IN_MEMORY_DB=true MOCK_STELLAR=true SECRET_ENCRYPTION_KEY=0000000000000000000000000000000000000000000000000000000000000000 node --import tsx src/tests/tradeAsset.test.ts",

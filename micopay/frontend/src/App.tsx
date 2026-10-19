@@ -58,6 +58,7 @@ import {
   getCurrentUser,
   lockTrade,
   setAvailability,
+  registerPushToken,
   type ProviderStatus,
   createTrade,
   fetchTradeDetail,
@@ -70,6 +71,7 @@ import { readJSON, writeJSON, removeKey, isBackupConfirmed, setBackupConfirmed }
 import { ApiError, mapApiError, type MappedApiError } from "./utils/apiError";
 import { IS_DEMO_MODE } from "./utils/demoMode";
 import { DEFAULT_ESCROW_ASSET_KEY, getEscrowAssetOption } from "./constants/escrowAssets";
+import { startPush, PUSH_PERMISSION_GRANTED_EVENT } from "./lib/push";
 
 const USERS_STORAGE_KEY = "micopay_user";
 /**
@@ -900,6 +902,52 @@ function BottomNavAdapter() {
   );
 }
 
+// ── Push notifications ───────────────────────────────────────────────────────
+// Con sesion, registra el telefono para recibir avisos y abre la pantalla del
+// aviso que se toco. El permiso se pide aqui, una vez, al entrar; si se niega,
+// la bandeja del agente explica como activarlo.
+function PushNotificationsBridge() {
+  const { sessionUser } = useAppCtx();
+  const navigate = useNavigate();
+  const token = sessionUser?.token ?? null;
+  // Sube cuando la persona da permiso desde la bandeja: vuelve a registrar.
+  const [permissionTick, setPermissionTick] = useState(0);
+
+  useEffect(() => {
+    const onGranted = () => setPermissionTick((n) => n + 1);
+    window.addEventListener(PUSH_PERMISSION_GRANTED_EVENT, onGranted);
+    return () => window.removeEventListener(PUSH_PERMISSION_GRANTED_EVENT, onGranted);
+  }, []);
+
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    let cleanup = () => {};
+    startPush({
+      askPermission: permissionTick === 0,
+      onToken: (pushToken) => {
+        // Si falla, se reintenta la proxima vez que abra la app: el token se
+        // vuelve a entregar en cada registro.
+        registerPushToken(pushToken, token).catch((err) => {
+          console.warn('[push] No se pudo guardar el token', err);
+        });
+      },
+      onOpen: (route) => navigate(route),
+    })
+      .then((stop) => {
+        if (cancelled) stop();
+        else cleanup = stop;
+      })
+      .catch((err) => console.warn('[push] No se pudieron activar los avisos', err));
+    return () => {
+      cancelled = true;
+      cleanup();
+    };
+  }, [token, navigate, permissionTick]);
+
+  return null;
+}
+
 // ── Connection banner host ───────────────────────────────────────────────────
 // Tracks browser/WebView online-offline state directly (navigator.onLine +
 // the online/offline events) — deliberately independent of the merchant
@@ -1374,6 +1422,7 @@ function App() {
               <ConnectionBannerHost />
               {/* Se oculta solo cuando hay conexión y no hay nada pendiente. */}
               <OfflineQueueStatus token={sessionUser?.token ?? null} />
+              <PushNotificationsBridge />
               <Routes>
                 <Route path="/login" element={<Login onLoginSuccess={handleLoginSuccess} />} />
                 <Route path="/register" element={<Register onLoginSuccess={handleLoginSuccess} />} />
