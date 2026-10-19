@@ -41,11 +41,8 @@ const History = ({ onBack, onSelectTrade, token }: HistoryProps) => {
     if (!token) return;
     setLoading(true);
     setLoadError(null);
-    getTradeHistory(token)
-      .then((items) => {
-        const filtered = status === 'all' ? items : items.filter((t) => t.status === status);
-        setTrades(filtered);
-      })
+    getTradeHistory(token, status === 'all' ? undefined : status)
+      .then((items) => setTrades(items))
       .catch((e) => {
         setLoadError(mapApiError(e));
         setTrades([]);
