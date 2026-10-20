@@ -17,6 +17,7 @@
     "test:kyc-didit": "node --import tsx src/tests/kyc-didit.test.ts",
     "test:security": "node --import tsx src/tests/security.test.ts",
     "test:escrow-contracts": "node --import tsx src/tests/escrowContracts.test.ts",
+    "test:lock-timeout": "cross-env ALLOW_IN_MEMORY_DB=true MOCK_STELLAR=true STELLAR_RPC_URL=http://127.0.0.1:9 SECRET_ENCRYPTION_KEY=0000000000000000000000000000000000000000000000000000000000000000 node --import tsx src/tests/lockTimeout.test.ts",
     "test:challenge": "cross-env ALLOW_IN_MEMORY_DB=true MOCK_STELLAR=true SECRET_ENCRYPTION_KEY=0000000000000000000000000000000000000000000000000000000000000000 node --import tsx src/tests/challenge.service.test.ts",
     "test:challenge-signature": "node --import tsx src/tests/challengeSignature.test.ts",
     "test:sign-requests": "node --import tsx src/tests/signRequests.test.ts",
