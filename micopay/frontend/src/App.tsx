@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef, createContext, useContext } from "react";
+import { useTranslation } from "react-i18next";
 import { generateAndStoreKeypair, keypairExists, getPublicKey, revealSecretKey } from './lib/keystore';
 import {
   HashRouter,
@@ -28,6 +29,8 @@ import QRReveal from "./pages/QRReveal";
 import DepositQR from "./pages/DepositQR";
 import SuccessScreen, { receiptFromServer, type SuccessReceipt } from "./pages/SuccessScreen";
 import Explore from "./pages/Explore";
+import ComingSoon from "./pages/ComingSoon";
+import { CETES_AVAILABLE, BLEND_AVAILABLE, DEFI_TRADING_ENABLED, SPEI_RAMP_ENABLED } from "./constants/features";
 import History from "./pages/History";
 import TradeDetail from "./pages/TradeDetail";
 import CETESScreen from "./pages/CETESScreen";
@@ -594,14 +597,9 @@ function ExploreRoute() {
       <Explore
           onBack={() => navigate('/')}
           onNavigate={(page) => navigate(navMap[page] ?? '/')}
-          // CETES buy/sell and Blend supply/borrow don't move real user funds yet
-          // (platform-key-only simulation on mainnet, audit finding B2) — hidden
-          // until a real user-signed implementation lands. Opt in with
-          // VITE_ENABLE_DEFI_TRADING=true for internal/demo builds.
-          // SPEI ramp (KYC + onramp + offramp) moves real funds (device keypair) —
-          // enabled independently via VITE_ENABLE_SPEI_RAMP=true.
-          showSpeiRamp={import.meta.env.VITE_ENABLE_SPEI_RAMP === 'true'}
-          showDefi={import.meta.env.VITE_ENABLE_DEFI_TRADING === 'true'}
+          // Apagados se muestran como "Próximamente" (constants/features.ts).
+          cetesAvailable={CETES_AVAILABLE}
+          blendAvailable={BLEND_AVAILABLE}
       />
   );
 }
@@ -609,6 +607,12 @@ function ExploreRoute() {
 function CetesRoute() {
   const navigate = useNavigate();
   const { sessionUser } = useAppCtx();
+  const { t } = useTranslation();
+  // Tambien se llega por la barra inferior ("Invertir"), por URL y por el
+  // regreso del KYC: todas pasan por aqui.
+  if (!CETES_AVAILABLE) {
+    return <ComingSoon title={t('exploreScreen.investCetes')} icon="trending_up" onBack={() => navigate('/explore')} />;
+  }
   return (
       <CETESScreen
           onBack={() => navigate('/explore')}
@@ -618,8 +622,8 @@ function CetesRoute() {
           // there by mistake.
           onBanco={() => navigate('/kyc')}
           userToken={sessionUser?.token}
-          showDefi={import.meta.env.VITE_ENABLE_DEFI_TRADING === 'true'}
-          showSpeiRamp={import.meta.env.VITE_ENABLE_SPEI_RAMP === 'true'}
+          showDefi={DEFI_TRADING_ENABLED}
+          showSpeiRamp={SPEI_RAMP_ENABLED}
       />
   );
 }
@@ -679,7 +683,8 @@ export function KYCRoute() {
   const navigate = useNavigate();
   const { sessionUser } = useAppCtx();
   const [params] = useSearchParams();
-  const destination = resolveKycReturn(params.get('return'), 'cetes');
+  // Sin CETES abierto no hay a donde volver ahi: se vuelve al inicio.
+  const destination = resolveKycReturn(params.get('return'), CETES_AVAILABLE ? 'cetes' : 'home');
   return (
       <KYCScreen
           token={sessionUser?.token ?? null}
@@ -693,9 +698,9 @@ export function KYCRoute() {
 
 function KYCApprovedNextRoute() {
   const navigate = useNavigate();
-  // After approved, continue to CETES + deposit flow.
+  // Tras aprobar, sigue a CETES si esta abierto; si no, al inicio.
   useEffect(() => {
-    navigate('/cetes');
+    navigate(CETES_AVAILABLE ? '/cetes' : '/');
   }, [navigate]);
   return null;
 }
@@ -704,6 +709,10 @@ function KYCApprovedNextRoute() {
 function BlendRoute() {
   const navigate = useNavigate();
   const { sessionUser } = useAppCtx();
+  const { t } = useTranslation();
+  if (!BLEND_AVAILABLE) {
+    return <ComingSoon title={t('exploreScreen.requestLoan')} icon="account_balance" onBack={() => navigate('/explore')} />;
+  }
   return (
       <BlendScreen
           onBack={() => navigate('/explore')}

@@ -5,13 +5,41 @@ import { Logo } from '../components/Logo';
 interface ExploreProps {
     onBack?: () => void;
     onNavigate?: (page: string) => void;
-    /** When true, DeFi features are hidden (backend reported mock/demo mode). */
-    showDefi?: boolean;
-    /** When true, SPEI ramp (KYC + onramp + offramp) is reachable independently. */
-    showSpeiRamp?: boolean;
+    /** CETES abierto en este build; si no, la tarjeta dice "Próximamente". */
+    cetesAvailable?: boolean;
+    /** Blend abierto en este build; si no, la tarjeta dice "Próximamente". */
+    blendAvailable?: boolean;
 }
 
-const Explore = ({ onBack, onNavigate, showDefi = true, showSpeiRamp = false }: ExploreProps) => {
+/** Botón de una tarjeta: el real, o uno deshabilitado que dice "Próximamente". */
+function CardAction({ available, onClick, className, label, icon }: {
+    available: boolean;
+    onClick: () => void;
+    className: string;
+    label: string;
+    icon: string;
+}) {
+    const { t } = useTranslation();
+    if (!available) {
+        return (
+            <button
+                disabled
+                aria-disabled="true"
+                className="w-full border-2 border-linea text-gris font-bold py-3 px-6 rounded-sm flex items-center justify-center gap-2 cursor-not-allowed">
+                {t('comingSoon.badge')}
+                <span className="material-symbols-outlined text-sm">schedule</span>
+            </button>
+        );
+    }
+    return (
+        <button onClick={onClick} className={className}>
+            {label}
+            <span className="material-symbols-outlined text-sm">{icon}</span>
+        </button>
+    );
+}
+
+const Explore = ({ onBack, onNavigate, cetesAvailable = true, blendAvailable = true }: ExploreProps) => {
     const { t } = useTranslation();
     return (
         <div className="bg-surface text-on-surface font-body min-h-screen flex flex-col pb-32">
@@ -39,53 +67,51 @@ const Explore = ({ onBack, onNavigate, showDefi = true, showSpeiRamp = false }: 
                 </section>
 
                 <div className="space-y-6">
-                    {/* CETES tokenizados — shown if either DeFi or SPEI ramp is enabled */}
-                    {(showDefi || showSpeiRamp) && (
-                        <article className="p-6 rounded-sm border border-primary/10 relative overflow-hidden group active:translate-x-[2px] active:translate-y-[2px] transition-all">
-                            <div className="flex items-center gap-4 mb-4">
-                                <div className="w-12 h-12 bg-papel rounded-sm flex items-center justify-center ">
-                                    <span className="material-symbols-outlined text-primary text-3xl">trending_up</span>
-                                </div>
-                                <div>
-                                    <h2 className="font-headline font-bold text-xl text-on-surface">{t('exploreScreen.investCetes')}</h2>
-                                    <p className="num text-[10px] font-bold text-primary uppercase tracking-widest">{t('exploreScreen.cetesRateBadge', { rate: 5.6 })}</p>
-                                </div>
+                    {/* CETES tokenizados: abierto o "Próximamente" (constants/features.ts) */}
+                    <article className={`p-6 rounded-sm border border-primary/10 relative overflow-hidden transition-all ${cetesAvailable ? 'group active:translate-x-[2px] active:translate-y-[2px]' : 'opacity-70'}`}>
+                        <div className="flex items-center gap-4 mb-4">
+                            <div className="w-12 h-12 bg-papel rounded-sm flex items-center justify-center ">
+                                <span className="material-symbols-outlined text-primary text-3xl">trending_up</span>
                             </div>
-                            <p className="text-sm text-on-surface-variant leading-relaxed mb-6">
-                                {t('exploreScreen.cetesDesc')}
-                            </p>
-                            <button
-                                onClick={() => onNavigate?.('cetes')}
-                                className="w-full bg-primary text-papel font-bold py-3 px-6 rounded-sm flex items-center justify-center gap-2 ">
-                                {t('exploreScreen.viewCetes')}
-                                <span className="material-symbols-outlined text-sm">arrow_forward</span>
-                            </button>
-                        </article>
-                    )}
+                            <div>
+                                <h2 className="font-headline font-bold text-xl text-on-surface">{t('exploreScreen.investCetes')}</h2>
+                                <p className="num text-[10px] font-bold text-primary uppercase tracking-widest">{t('exploreScreen.cetesRateBadge', { rate: 5.6 })}</p>
+                            </div>
+                        </div>
+                        <p className="text-sm text-on-surface-variant leading-relaxed mb-6">
+                            {t('exploreScreen.cetesDesc')}
+                        </p>
+                        <CardAction
+                            available={cetesAvailable}
+                            onClick={() => onNavigate?.('cetes')}
+                            className="w-full bg-primary text-papel font-bold py-3 px-6 rounded-sm flex items-center justify-center gap-2 "
+                            label={t('exploreScreen.viewCetes')}
+                            icon="arrow_forward"
+                        />
+                    </article>
 
-                    {/* Blend DeFi — feature-gated */}
-                    {showDefi && (
-                        <article className="bg-papel p-6 rounded-sm border-2 border-tinta relative overflow-hidden group active:translate-x-[2px] active:translate-y-[2px] transition-all">
-                            <div className="flex items-center gap-4 mb-4">
-                                <div className="w-12 h-12 bg-papel rounded-sm flex items-center justify-center border-2 border-tinta">
-                                    <span className="material-symbols-outlined text-on-surface text-3xl">account_balance</span>
-                                </div>
-                                <div>
-                                    <h2 className="font-headline font-bold text-xl text-on-surface">{t('exploreScreen.requestLoan')}</h2>
-                                    <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">{t('exploreScreen.blendSubtitle')}</p>
-                                </div>
+                    {/* Blend: abierto o "Próximamente" (constants/features.ts) */}
+                    <article className={`bg-papel p-6 rounded-sm border-2 border-tinta relative overflow-hidden transition-all ${blendAvailable ? 'group active:translate-x-[2px] active:translate-y-[2px]' : 'opacity-70'}`}>
+                        <div className="flex items-center gap-4 mb-4">
+                            <div className="w-12 h-12 bg-papel rounded-sm flex items-center justify-center border-2 border-tinta">
+                                <span className="material-symbols-outlined text-on-surface text-3xl">account_balance</span>
                             </div>
-                            <p className="text-sm text-on-surface-variant leading-relaxed mb-6">
-                                {t('exploreScreen.blendDesc')}
-                            </p>
-                            <button
-                                onClick={() => onNavigate?.('blend')}
-                                className="w-full border-2 border-primary text-primary font-bold py-3 px-6 rounded-sm flex items-center justify-center gap-2">
-                                {t('exploreScreen.viewHowMuch')}
-                                <span className="material-symbols-outlined text-sm">info</span>
-                            </button>
-                        </article>
-                    )}
+                            <div>
+                                <h2 className="font-headline font-bold text-xl text-on-surface">{t('exploreScreen.requestLoan')}</h2>
+                                <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">{t('exploreScreen.blendSubtitle')}</p>
+                            </div>
+                        </div>
+                        <p className="text-sm text-on-surface-variant leading-relaxed mb-6">
+                            {t('exploreScreen.blendDesc')}
+                        </p>
+                        <CardAction
+                            available={blendAvailable}
+                            onClick={() => onNavigate?.('blend')}
+                            className="w-full border-2 border-primary text-primary font-bold py-3 px-6 rounded-sm flex items-center justify-center gap-2"
+                            label={t('exploreScreen.viewHowMuch')}
+                            icon="info"
+                        />
+                    </article>
                 </div>
 
                 {/* Footer Section */}

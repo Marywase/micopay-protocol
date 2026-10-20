@@ -414,6 +414,11 @@
     "noAgentsDesc": "No nearby agent can handle ${{amount}} MXN right now. Try a different amount or later.",
     "changeAmount": "Change amount"
   },
+  "comingSoon": {
+    "badge": "Coming soon",
+    "desc": "We're finishing this feature. We'll let you know when it's ready.",
+    "back": "Back to Explore"
+  },
   "exploreScreen": {
     "title": "Explore",
     "subtitle": "Discover new ways to use your money",

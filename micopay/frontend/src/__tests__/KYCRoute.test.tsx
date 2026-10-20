@@ -21,6 +21,16 @@ vi.mock('react-i18next', async (importOriginal) => {
   };
 });
 
+// Estas pruebas son del build interno, con CETES abierto. El build de Play
+// (CETES cerrado) se prueba al final: ahi el KYC vuelve al inicio.
+const features = vi.hoisted(() => ({ cetes: true }));
+vi.mock('../constants/features', () => ({
+  get CETES_AVAILABLE() { return features.cetes; },
+  get BLEND_AVAILABLE() { return features.cetes; },
+  get DEFI_TRADING_ENABLED() { return features.cetes; },
+  SPEI_RAMP_ENABLED: false,
+}));
+
 vi.mock('../services/api', () => ({
   startKYC: vi.fn(),
   getKYCStatus: vi.fn(),
@@ -266,6 +276,39 @@ describe('KYC-1 — la caché local no manda', () => {
     );
 
     await waitFor(() => expect(mockGetKYCStatus).toHaveBeenCalled());
+    expect(screen.queryByTestId('cetes-screen')).not.toBeInTheDocument();
+  });
+});
+
+describe('KYCRoute — build de Play (CETES "Próximamente")', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    features.cetes = false;
+  });
+  afterEach(() => {
+    features.cetes = true;
+  });
+
+  it('al aprobar vuelve al inicio, no a una pantalla cerrada', async () => {
+    mockReadJSON.mockResolvedValue({ status: 'approved' });
+    mockGetKYCStatus.mockResolvedValue({ status: 'approved' });
+
+    render(
+      <AppContext.Provider value={createMockAppCtx()}>
+        <MemoryRouter initialEntries={['/kyc']}>
+          <LocationTracker />
+          <Routes>
+            <Route path="/kyc" element={<KYCRoute />} />
+            <Route path="/cetes" element={<div data-testid="cetes-screen">CETES Screen Content</div>} />
+            <Route path="/" element={<div data-testid="home-screen">Home Screen</div>} />
+          </Routes>
+        </MemoryRouter>
+      </AppContext.Provider>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByTestId('home-screen')).toBeInTheDocument();
+    });
     expect(screen.queryByTestId('cetes-screen')).not.toBeInTheDocument();
   });
 });

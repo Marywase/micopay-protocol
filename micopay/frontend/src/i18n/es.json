@@ -414,6 +414,11 @@
     "noAgentsDesc": "Ningún agente cercano puede atender ${{amount}} MXN ahora mismo. Intenta con otro monto o más tarde.",
     "changeAmount": "Cambiar monto"
   },
+  "comingSoon": {
+    "badge": "Próximamente",
+    "desc": "Estamos terminando esta función. Te avisaremos cuando esté lista.",
+    "back": "Volver a Explorar"
+  },
   "exploreScreen": {
     "title": "Explorar",
     "subtitle": "Descubre nuevas formas de usar tu dinero",
