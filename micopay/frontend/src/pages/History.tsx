@@ -2,8 +2,23 @@ import { useState, useEffect, useCallback } from 'react';
 import { Pill } from '../components/ui';
 import { useTranslation } from 'react-i18next';
 import ErrorBanner from '../components/ErrorBanner';
-import { getTradeHistory, TradeHistoryItem } from '../services/api';
+import { getTradeHistory, getPaymentHistory, TradeHistoryItem, type PaymentHistoryItem } from '../services/api';
 import { mapApiError, type MappedApiError } from '../utils/apiError';
+import { buildTxUrl } from '../utils/stellarExplorer';
+
+/** Renglon del historial: una operacion de efectivo o una transferencia de la red. */
+type Row =
+  | { kind: 'trade'; at: number; trade: TradeHistoryItem }
+  | { kind: 'payment'; at: number; payment: PaymentHistoryItem };
+
+function shortAddress(addr: string): string {
+  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+}
+
+function formatAmount(amount: string): string {
+  const n = Number(amount);
+  return Number.isFinite(n) ? n.toLocaleString('es-MX', { maximumFractionDigits: 7 }) : amount;
+}
 
 const STATUS_LABEL: Record<string, { label: string; color: string; bg: string }> = {
   completed: { label: 'Completado', color: 'text-verde-claro', bg: 'bg-verde-claro/10' },
@@ -23,6 +38,7 @@ interface HistoryProps {
 
 const FILTERS = [
   { id: 'all', label: 'Todos' },
+  { id: 'transfers', label: 'Transferencias' },
   { id: 'completed', label: 'Completados' },
   { id: 'cancelled', label: 'Cancelados' },
   { id: 'expired', label: 'Expirados' },
@@ -31,24 +47,43 @@ const FILTERS = [
 
 const History = ({ onBack, onSelectTrade, token }: HistoryProps) => {
   const { t } = useTranslation();
-  const [trades, setTrades] = useState<TradeHistoryItem[]>([]);
+  const [rows, setRows] = useState<Row[]>([]);
   const [status, setStatus] = useState('all');
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<MappedApiError | null>(null);
+  const [paymentsFailed, setPaymentsFailed] = useState(false);
 
   const loadHistory = useCallback(() => {
     if (!token) return;
     setLoading(true);
     setLoadError(null);
-    getTradeHistory(token)
-      .then((items) => {
-        const filtered = status === 'all' ? items : items.filter((t) => t.status === status);
-        setTrades(filtered);
-      })
-      .catch((e) => {
-        setLoadError(mapApiError(e));
-        setTrades([]);
+    setPaymentsFailed(false);
+    const wantTrades = status !== 'transfers';
+    const wantPayments = status === 'all' || status === 'transfers';
+    Promise.allSettled([
+      wantTrades ? getTradeHistory(token) : Promise.resolve([]),
+      wantPayments ? getPaymentHistory(token) : Promise.resolve([]),
+    ])
+      .then(([tradesRes, paymentsRes]) => {
+        // Las operaciones son lo principal: si fallan, se muestra el error.
+        // Si solo fallan las transferencias, se avisa sin tapar lo demas.
+        if (tradesRes.status === 'rejected') {
+          setLoadError(mapApiError(tradesRes.reason));
+          setRows([]);
+          return;
+        }
+        if (paymentsRes.status === 'rejected') setPaymentsFailed(true);
+        const trades = status === 'all' || status === 'transfers'
+          ? tradesRes.value
+          : tradesRes.value.filter((t) => t.status === status);
+        const payments = paymentsRes.status === 'fulfilled' ? paymentsRes.value : [];
+        const next: Row[] = [
+          ...trades.map((trade): Row => ({ kind: 'trade', at: Date.parse(trade.created_at), trade })),
+          ...payments.map((payment): Row => ({ kind: 'payment', at: Date.parse(payment.created_at), payment })),
+        ];
+        next.sort((a, b) => b.at - a.at);
+        setRows(next);
       })
       .finally(() => setLoading(false));
   }, [token, status, page]);
@@ -96,13 +131,19 @@ const History = ({ onBack, onSelectTrade, token }: HistoryProps) => {
           />
         ) : null}
 
+        {!loading && paymentsFailed ? (
+          <p className="text-xs text-gris mb-4">
+            No pudimos cargar tus transferencias de la red. Aparecerán al volver a abrir el historial.
+          </p>
+        ) : null}
+
         {/* Trade List */}
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 opacity-50">
             <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4"></div>
             <p className="text-sm font-medium">Cargando historial...</p>
           </div>
-        ) : loadError ? null : trades.length === 0 ? (
+        ) : loadError ? null : rows.length === 0 ? (
           <div className="bg-papel rounded-sm border-2 border-tinta p-12 text-center mt-10">
             <div className="w-16 h-16 bg-surface-container-low rounded-sm flex items-center justify-center mx-auto mb-4">
               <span className="material-symbols-outlined text-gris text-3xl">history_toggle_off</span>
@@ -114,7 +155,9 @@ const History = ({ onBack, onSelectTrade, token }: HistoryProps) => {
           </div>
         ) : (
           <div className="flex flex-col gap-3">
-            {trades.map((trade) => {
+            {rows.map((row) => {
+              if (row.kind === 'payment') return <PaymentRow key={`p-${row.payment.id}`} payment={row.payment} />;
+              const trade = row.trade;
               const s = STATUS_LABEL[trade.status] || STATUS_LABEL.pending;
               const isCashIn = false;
               const date = new Date(trade.created_at).toLocaleDateString('es-MX', {
@@ -159,7 +202,7 @@ const History = ({ onBack, onSelectTrade, token }: HistoryProps) => {
         )}
 
         {/* Pagination */}
-        {!loading && trades.length > 0 && (
+        {!loading && rows.length > 0 && (
           <div className="flex items-center justify-between mt-8">
             <button
               disabled={page === 1}
@@ -171,7 +214,7 @@ const History = ({ onBack, onSelectTrade, token }: HistoryProps) => {
             </button>
             <span className="text-xs font-bold text-gris">Página {page}</span>
             <button
-              disabled={trades.length < 10}
+              disabled={rows.length < 10}
               onClick={() => setPage(p => p + 1)}
               className="flex items-center gap-2 px-4 py-2 rounded-sm border-2 border-tinta text-sm font-bold disabled:opacity-30 disabled:pointer-events-none hover:bg-surface-container-low transition-colors"
             >
@@ -184,5 +227,46 @@ const History = ({ onBack, onSelectTrade, token }: HistoryProps) => {
     </div>
   );
 };
+
+/** Transferencia de la red. Al tocarla se abre en el explorador. */
+function PaymentRow({ payment }: { payment: PaymentHistoryItem }) {
+  const incoming = payment.direction === 'in';
+  const who = payment.counterparty_username ? `@${payment.counterparty_username}` : shortAddress(payment.counterparty);
+  const date = new Date(payment.created_at).toLocaleDateString('es-MX', {
+    day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
+  });
+  return (
+    <a
+      href={buildTxUrl(payment.tx_hash)}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="block bg-papel rounded-sm p-4 border-2 border-tinta active:translate-x-[2px] active:translate-y-[2px]"
+    >
+      <div className="flex items-center gap-4">
+        <div className={`w-12 h-12 rounded-sm flex items-center justify-center flex-shrink-0 ${incoming ? 'bg-verde-claro/10' : 'bg-primary/10'}`}>
+          <span aria-hidden="true" className={`material-symbols-outlined ${incoming ? 'text-verde-claro' : 'text-primary'}`}>
+            {incoming ? 'south_west' : 'north_east'}
+          </span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex justify-between items-start mb-1">
+            <p className="font-bold text-on-surface text-sm truncate">
+              {incoming ? 'De' : 'A'} {who}
+            </p>
+            <p className={`font-black text-sm ${incoming ? 'text-verde-claro' : 'text-on-surface'}`}>
+              {incoming ? '+' : '−'}{formatAmount(payment.amount)} {payment.asset}
+            </p>
+          </div>
+          <div className="flex justify-between items-center">
+            <p className="text-[11px] text-gris font-medium uppercase tracking-wider">{date}</p>
+            <span className="px-2 py-0.5 rounded-sm text-[10px] font-black uppercase tracking-widest text-gris bg-outline/10">
+              {incoming ? 'Recibido' : 'Enviado'}
+            </span>
+          </div>
+        </div>
+      </div>
+    </a>
+  );
+}
 
 export default History;

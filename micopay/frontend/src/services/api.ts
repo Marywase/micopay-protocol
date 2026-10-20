@@ -545,6 +545,23 @@ export async function getTradeHistory(
   return res.data.trades;
 }
 
+/** Transferencia de la cuenta leida de la red (Enviar pago, pagos de fuera). */
+export interface PaymentHistoryItem {
+  id: string;
+  tx_hash: string;
+  created_at: string;
+  direction: 'in' | 'out';
+  amount: string;
+  asset: string;
+  counterparty: string;
+  counterparty_username: string | null;
+}
+
+export async function getPaymentHistory(token: string): Promise<PaymentHistoryItem[]> {
+  const res = await http.get("/payments/history", authHeaders(token));
+  return res.data.payments;
+}
+
 export async function getCurrentUser(
     token: string,
 ): Promise<CurrentUserProfile> {
