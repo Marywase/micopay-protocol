@@ -60,7 +60,7 @@
    todo, los marcadores que MapReal construye con element.style fuera de React.
    Ese fallo no aparece en dev y sí en producción. */
 @theme static {
-  /* ── Verde: lo digital (USDC, MXNe, CETES, saldos) ── */
+  /* ── Verde: lo digital (USDC, CETES, saldos) ── */
   --color-verde: #0f4a33;
   --color-verde-claro: #1a7a54;
   --color-verde-brillo: #4fb98a;   /* el verde del lado OSCURO */

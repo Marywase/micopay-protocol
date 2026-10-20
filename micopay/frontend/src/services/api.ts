@@ -668,7 +668,7 @@ export async function getCETESRate(amount = "100"): Promise<CETESRate> {
 
 export async function buyCETES(
     amount: string,
-    sourceAsset: "XLM" | "USDC" | "MXNe",
+    sourceAsset: "XLM" | "USDC",
 ): Promise<CETESTxResult> {
   const res = await http.post("/defi/cetes/buy", { amount, sourceAsset });
   return res.data;
@@ -676,7 +676,7 @@ export async function buyCETES(
 
 export async function sellCETES(
     amount: string,
-    destAsset: "XLM" | "USDC" | "MXNe",
+    destAsset: "XLM" | "USDC",
 ): Promise<CETESTxResult> {
   const res = await http.post("/defi/cetes/sell", { amount, destAsset });
   return res.data;
