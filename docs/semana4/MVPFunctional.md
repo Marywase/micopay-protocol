@@ -94,5 +94,5 @@ Si H2 o H5 no se cumplen, priorizamos el onboarding y la recuperación de cuenta
 | --- | --- | --- |
 | Eric Mota Tejeda | [@ericmt-98](https://github.com/ericmt-98) | Autor del contrato de escrow y del backend; exigió el plazo de 120 min en el `lock` firmado y activó notificaciones push (19 oct). |
 | Raúl Vallejo | [@vallejoraul08-debug](https://github.com/vallejoraul08-debug) | Ejecutó el `lock` y `release` de evidencia en testnet y redactó esta documentación. |
-| Anna Medina | [@annapats](https://github.com/annapats) | [pendiente] |
+| Anna Medina | [@annapats](https://github.com/annapats) | Coordinó el plan de 30 días del Instaward en Monday, configuró el correo del dominio (micopay.com.mx en Zoho con SPF, DKIM y DMARC verificados), creó el proyecto de Firebase para las notificaciones push y la cuenta de Play Console, y abrió el contacto con Etherfuse para resolver el KYC con Didit. |
 | José Alfredo Román Cruz | [@josealfredo79](https://github.com/josealfredo79) | [pendiente] |
