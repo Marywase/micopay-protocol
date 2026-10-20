@@ -28,7 +28,7 @@
 | [`micopay/contracts/escrow/`](../../micopay/contracts/escrow/) | Contrato `MicopayEscrow` en Rust/Soroban: `initialize`, `lock`, `release`, `refund`, `get_trade`. Pruebas en `src/test.rs` (bloqueo y liberación, devolución tras el plazo, devolución antes del plazo rechazada, secreto equivocado rechazado, secreto reutilizado rechazado). |
 | [`micopay/contracts/TESTNET.md`](../../micopay/contracts/TESTNET.md) | IDs canónicos de testnet y cómo redesplegar. |
 | [`micopay/backend/`](../../micopay/backend/) | API en Node/TypeScript que conecta el front con el contrato: crea el intercambio, genera y cifra el secreto, arma la transacción sin firmar para que el teléfono la firme, verifica que la firma corresponda a la llamada esperada y la envía a Stellar. También calcula comisiones (plataforma 0.8 % + comisión configurable por comercio), quema el token del QR al escanear y expone el historial. |
-| [`micopay/frontend/`](../../micopay/frontend/) | App React + Vite empaquetada con Capacitor para Android. Las direcciones del contrato y del activo están en `micopay/frontend/.env.testnet`. |
+| [`micopay/frontend/`](../../micopay/frontend/) | App React + Vite empaquetada con Capacitor para Android. Los contratos de escrow de testnet (uno por activo) están en [`micopay/contracts/TESTNET.md`](../../micopay/contracts/TESTNET.md) y el backend los toma de `ESCROW_CONTRACTS`. |
 
 ### Cómo se conecta todo
 
@@ -92,7 +92,7 @@ Si H2 o H5 no se cumplen, priorizamos el onboarding y la recuperación de cuenta
 
 | Integrante | Usuario de GitHub | Aporte en esta entrega |
 | --- | --- | --- |
-| Eric Mota Tejeda | [@ericmt-98](https://github.com/ericmt-98) | Autor del contrato de escrow y del backend; exigió el plazo de 120 min en el `lock` firmado y activó notificaciones push (19 oct). |
+| Eric Mota Tejeda | [@ericmt-98](https://github.com/ericmt-98) | Autor del contrato de escrow y del backend. Esta semana: exigió el plazo de 120 min en cada `lock` firmado ([#437](https://github.com/Micopay/micopay-protocol/pull/437)) y activó las notificaciones push de la operación ([#439](https://github.com/Micopay/micopay-protocol/pull/439)), los dos en el backend publicado desde el 19 oct; quitó MXNe de la app ([#442](https://github.com/Micopay/micopay-protocol/pull/442), en revisión) y auditó la app, de donde salieron los issues [#433](https://github.com/Micopay/micopay-protocol/issues/433), [#434](https://github.com/Micopay/micopay-protocol/issues/434) y [#435](https://github.com/Micopay/micopay-protocol/issues/435). |
 | Raúl Vallejo | [@vallejoraul08-debug](https://github.com/vallejoraul08-debug) | Ejecutó el `lock` y `release` de evidencia en testnet y redactó esta documentación. |
 | Anna Medina | [@annapats](https://github.com/annapats) | Coordinó el plan de 30 días del Instaward en Monday, configuró el correo del dominio (micopay.com.mx en Zoho con SPF, DKIM y DMARC verificados), creó el proyecto de Firebase para las notificaciones push y la cuenta de Play Console, y abrió el contacto con Etherfuse para resolver el KYC con Didit. |
 | José Alfredo Román Cruz | [@josealfredo79](https://github.com/josealfredo79) | [pendiente] |
