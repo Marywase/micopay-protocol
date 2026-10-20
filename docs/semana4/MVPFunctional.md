@@ -13,7 +13,6 @@
 | Qué | Enlace |
 | --- | --- |
 | Video (producto funcionando + pitch, ≤3 min) | [pendiente: enlace de YouTube] |
-| Front en línea | [pendiente: URL de Vercel] |
 | Backend publicado (testnet) | [api.micopay.app/health](https://api.micopay.app/health) |
 | Contrato escrow — instancia USDC | [CDUI253F…YGAX](https://stellar.expert/explorer/testnet/contract/CDUI253FSVVVXUBI4SU3PEQIDNCYWGABGUOCRBIINRCJ4SJ5XVKWYGAX) |
 | Contrato escrow — instancia XLM | [CBFDXYUP…UNQWE](https://stellar.expert/explorer/testnet/contract/CBFDXYUPL4Q37JP3JD6JHFG6BQGNG6VOTTGMBTTPE5TYDHOVRY5UNQWE) |
@@ -45,7 +44,7 @@
 Lo que más aprendimos esta semana es que la parte difícil no es el contrato, sino lo que lo rodea. El escrow lleva meses estable y sus pruebas pasan; lo que falló en pruebas reales fue la liquidez (el 15 de octubre no había ningún agente con efectivo para $500 MXN cerca) y la claridad del activo: la referencia equivocada del token en testnet ya nos había hecho bloquear XLM pensando que era MXNe. Por eso ordenamos los ajustes así:
 
 1. **Alto impacto, bajo esfuerzo — antes del cierre:** dejar en el repositorio el contrato y el backend junto al front, con evidencia pública en el explorador (hecho en esta entrega), y exigir en el backend el plazo de 120 minutos en cada `lock` firmado (hecho el 19 de octubre).
-2. **Alto impacto, esfuerzo medio — antes del cierre:** publicar el front en Vercel y grabar un intercambio completo con dos teléfonos (usuario y agente) para cubrir las pantallas de confirmación a intercambio completado.
+2. **Alto impacto, esfuerzo medio — antes del cierre:** grabar un intercambio completo con dos teléfonos (usuario y agente) para cubrir las pantallas de confirmación a intercambio completado.
 3. **Alto impacto, esfuerzo alto — queda pendiente:** mejorar el respaldo de la llave del usuario, que la investigación marcó como la barrera más fuerte; la decisión fue mantener la llave actual en el MVP y evaluar passkeys después, con pruebas en testnet.
 4. **Impacto medio, esfuerzo medio — queda pendiente:** llevar el historial de cada comercio a la red (hoy se calcula en la base de datos) y tomar el tipo de cambio de una fuente en vivo.
 
