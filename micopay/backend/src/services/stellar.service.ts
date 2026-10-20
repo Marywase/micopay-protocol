@@ -22,7 +22,11 @@ export async function assertNotReplayed(
   }
 }
 
-const DEFAULT_TIMEOUT_MINUTES = 120;
+// Ventana antes de que `refund` quede disponible. El contrato acepta cualquier
+// valor (incluso 0), asi que el backend la fija aqui y `submitLockTx` rechaza un
+// lock firmado con otra: con 0, el vendedor podia recuperar los fondos despues
+// de recibir el efectivo y antes de que llegara el release.
+export const LOCK_TIMEOUT_MINUTES = 120;
 
 function getNetworkPassphrase(NetworksModule: typeof import('@stellar/stellar-sdk').Networks) {
   return config.stellarNetwork === 'TESTNET' ? NetworksModule.TESTNET : NetworksModule.PUBLIC;
@@ -75,9 +79,9 @@ async function assertInvocationMatches(
     throw new BadRequestError('TX_FUNCTION_MISMATCH', 'La transacción firmada no corresponde a esta operación.', `Expected function ${expected.functionName}, got ${functionName}`);
   }
 
-  // Only the leading args we pass in `expected` are checked — trailing args
-  // (e.g. lock's timeout_minutes) aren't fund-relevant and are intentionally
-  // left unchecked by the caller omitting them from `expected.args`.
+  // Only the leading args we pass in `expected` are checked. Callers must list
+  // every argument that decides who ends up with the funds — for lock() that
+  // includes timeout_minutes, which sets when refund() opens.
   const actualArgs = invocation.args().map((a) => scValToNative(a));
   if (actualArgs.length < expected.args.length) {
     throw new BadRequestError('TX_ARGS_MISMATCH', 'La transacción firmada no corresponde a este intercambio.', `Arg count mismatch: expected at least ${expected.args.length}, got ${actualArgs.length}`);
@@ -155,7 +159,6 @@ export async function prepareLockTx(params: {
    */
   platformFeeStroops: bigint;
   secretHash: string; // 64-char hex (32 bytes)
-  timeoutMinutes?: number;
 }): Promise<{ xdr: string; networkPassphrase: string }> {
   const {
     Contract, TransactionBuilder, Networks, nativeToScVal, Address,
@@ -163,7 +166,6 @@ export async function prepareLockTx(params: {
 
   const {
     sellerAddress, buyerAddress, amountStroops, platformFeeStroops, secretHash,
-    timeoutMinutes = DEFAULT_TIMEOUT_MINUTES,
   } = params;
 
   const networkPassphrase = getNetworkPassphrase(Networks);
@@ -182,7 +184,7 @@ export async function prepareLockTx(params: {
         nativeToScVal(amountStroops, { type: 'i128' }),
         nativeToScVal(platformFeeStroops, { type: 'i128' }),
         nativeToScVal(secretHashBytes, { type: 'bytes' }),
-        nativeToScVal(timeoutMinutes, { type: 'u32' }),
+        nativeToScVal(LOCK_TIMEOUT_MINUTES, { type: 'u32' }),
       ),
     )
     .setTimeout(180)
@@ -232,7 +234,7 @@ export async function submitLockTx(params: {
       params.amountStroops,
       params.platformFeeStroops,
       Buffer.from(params.secretHash, 'hex'),
-      // timeout_minutes (6th arg) intentionally omitted — not fund-relevant.
+      LOCK_TIMEOUT_MINUTES,
     ],
   });
 
