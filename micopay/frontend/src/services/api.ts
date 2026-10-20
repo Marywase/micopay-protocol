@@ -578,6 +578,11 @@ export async function setAvailability(availability: Availability, token: string)
   await http.patch('/users/me/availability', { availability }, authHeaders(token));
 }
 
+/** Guarda el token de Firebase del telefono para que el backend pueda avisar. */
+export async function registerPushToken(pushToken: string, token: string): Promise<void> {
+  await http.patch('/users/me/push_token', { push_token: pushToken }, authHeaders(token));
+}
+
 // ─── DeFi: CETES ──────────────────────────────────────────────────────────
 
 export interface CETESRate {
