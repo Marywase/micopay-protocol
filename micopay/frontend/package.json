@@ -8,6 +8,7 @@
     "build": "tsc && vite build",
     "build:dev": "tsc && vite build --mode development",
     "build:testnet": "tsc && vite build --mode testnet",
+    "build:play": "tsc && vite build --mode play",
     "build:mainnet": "tsc && vite build --mode mainnet",
     "build:prod": "tsc && vite build --mode production",
     "preview": "vite preview",
