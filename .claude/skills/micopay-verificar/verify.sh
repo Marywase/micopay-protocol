@@ -53,6 +53,9 @@ bad()  { echo "  ${RED}FALLO${RST} $*"; FAILURES=$((FAILURES+1)); }
 section() { echo; echo "${BLD}== $*${RST}"; }
 stop_if_failed() { [ "$FAILURES" -gt 0 ] && [ "$KEEP_GOING" -eq 0 ] && summary; }
 FAILURES=0; WARNINGS=0
+# macOS no trae `timeout`; sin el, los tests corren sin limite de tiempo.
+TIMEOUT=""
+command -v timeout >/dev/null 2>&1 && TIMEOUT="timeout 180"
 NOTES=()
 
 summary() {
@@ -135,7 +138,7 @@ ensure_deps() {
   # Se compara por contenido, no por fecha: cambiar de rama reescribe el
   # lockfile aunque sea identico.
   local want have marker="$pkg/node_modules/.micopay-lock-hash"
-  want=$(sha1sum "$pkg/package-lock.json" | cut -d' ' -f1)
+  want=$(git hash-object "$pkg/package-lock.json")
   have=$(cat "$marker" 2>/dev/null || true)
   if [ ! -d "$pkg/node_modules" ] || [ "$want" != "$have" ]; then
     echo "  instalando dependencias de $pkg (npm ci)…"
@@ -223,7 +226,7 @@ if [ "$BE_TOUCHED" -eq 1 ]; then
   fi
   for s in $SELECTED; do
     log="$TMP/be-$s.log"
-    if (cd "$BE" && timeout 180 npm run -s "$s" >"$log" 2>&1); then
+    if (cd "$BE" && $TIMEOUT npm run -s "$s" >"$log" 2>&1); then
       ok "$s"
     elif grep -q "ECONNREFUSED 127.0.0.1:5432" "$log" && ! grep -q "ERR_ASSERTION" "$log"; then
       warn "REQUIERE PG $s (no hay PostgreSQL en 127.0.0.1:5432; no se pudo verificar)"
@@ -233,7 +236,7 @@ if [ "$BE_TOUCHED" -eq 1 ]; then
       grep -vE '^\{"level"' "$log" | grep -iE "assert|error" | head -5 | sed 's/^/        /'
     elif ! base_worktree; then
       warn "NO SE PUDO COMPARAR $s con $BASE (git worktree fallo); revisalo a mano. Log: $log"
-    elif ! (cd "$WORKTREE/$BE" && timeout 180 npm run -s "$s" >"$TMP/be-base.log" 2>&1); then
+    elif ! (cd "$WORKTREE/$BE" && $TIMEOUT npm run -s "$s" >"$TMP/be-base.log" 2>&1); then
       warn "PREEXISTENTE $s (tambien falla en $BASE)"
       NOTES+=("Menciona en el PR que $s ya fallaba en $BASE.")
     else
