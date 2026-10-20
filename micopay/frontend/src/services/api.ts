@@ -583,6 +583,14 @@ export async function registerPushToken(pushToken: string, token: string): Promi
   await http.patch('/users/me/push_token', { push_token: pushToken }, authHeaders(token));
 }
 
+/**
+ * Despues de "Enviar pago": el backend lee la transaccion en la red y, si quien
+ * recibe es usuario de MicoPay, le avisa al telefono.
+ */
+export async function notifyPaymentSent(txHash: string, token: string): Promise<void> {
+  await http.post('/payments/notify', { tx_hash: txHash }, authHeaders(token));
+}
+
 // ─── DeFi: CETES ──────────────────────────────────────────────────────────
 
 export interface CETESRate {

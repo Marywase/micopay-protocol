@@ -9,6 +9,8 @@ import { STELLAR_NETWORK_LABEL } from '../utils/stellarExplorer';
 interface SendPaymentProps {
   onBack: () => void;
   onDone: () => void;
+  /** Cuando el pago ya esta en la red, para avisar a quien recibe. */
+  onSent?: (result: SendResult) => void;
 }
 
 type Step = 'form' | 'review' | 'sending' | 'done' | 'error';
@@ -21,7 +23,7 @@ function extractAddress(raw: string): string {
   return m ? m[0] : trimmed;
 }
 
-const SendPayment = ({ onBack, onDone }: SendPaymentProps) => {
+const SendPayment = ({ onBack, onDone, onSent }: SendPaymentProps) => {
   const { t } = useTranslation();
   const { tokens, loading: balLoading } = useWalletBalance();
   const { scan } = useQRScanner();
@@ -66,6 +68,7 @@ const SendPayment = ({ onBack, onDone }: SendPaymentProps) => {
       const r = await sendPayment({ destination, assetCode, amount, memo });
       setResult(r);
       setStep('done');
+      onSent?.(r);
     } catch (e) {
       setError(e instanceof PaymentError ? e.message : 'No se pudo enviar el pago.');
       setStep('error');

@@ -260,6 +260,34 @@ export async function sendTradeUpdateNotification(
   );
 }
 
+export interface PaymentReceivedPayload {
+  txHash: string;
+  amount: string; // ya formateado, sin ceros de sobra
+  asset: string;
+  senderUsername: string | null;
+}
+
+export function buildPaymentReceivedMessage(payload: PaymentReceivedPayload): { title: string; body: string } {
+  const from = payload.senderUsername ? ` de @${payload.senderUsername}` : '';
+  return {
+    title: 'Recibiste dinero',
+    body: `Te llegaron ${payload.amount} ${payload.asset}${from}.`,
+  };
+}
+
+/** Pago directo entre usuarios (Enviar pago). Ver paymentNotify.service. */
+export async function sendPaymentReceivedNotification(
+  userId: string,
+  payload: PaymentReceivedPayload,
+): Promise<boolean> {
+  return sendToUser(
+    userId,
+    buildPaymentReceivedMessage(payload),
+    { type: 'payment_received', txHash: payload.txHash },
+    'trade_alerts',
+  );
+}
+
 export interface SignRequestNotificationPayload {
   requestId: string;
   instruction?: string;

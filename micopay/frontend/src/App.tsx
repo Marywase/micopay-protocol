@@ -62,6 +62,7 @@ import {
   lockTrade,
   setAvailability,
   registerPushToken,
+  notifyPaymentSent,
   type ProviderStatus,
   createTrade,
   fetchTradeDetail,
@@ -256,10 +257,15 @@ function PayHubRoute() {
 
 function SendPaymentRoute() {
   const navigate = useNavigate();
+  const { sessionUser } = useAppCtx();
   return (
       <SendPayment
           onBack={() => navigate('/pay')}
           onDone={() => navigate('/')}
+          onSent={(r) => {
+            // El pago ya salio; si el aviso falla no se le dice nada a quien envio.
+            if (sessionUser?.token) notifyPaymentSent(r.hash, sessionUser.token).catch(() => {});
+          }}
       />
   );
 }

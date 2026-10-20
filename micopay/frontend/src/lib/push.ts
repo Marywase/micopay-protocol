@@ -26,6 +26,8 @@ export function routeForNotification(data: Record<string, unknown> | undefined):
   // El agente atiende la operacion nueva desde su bandeja, no desde el detalle.
   if (type === 'new_trade') return '/inbox';
   if (type === 'sign_request' && requestId) return `/sign-request/${encodeURIComponent(requestId)}`;
+  // El saldo nuevo se ve en el inicio.
+  if (type === 'payment_received') return '/';
   return null;
 }
 
