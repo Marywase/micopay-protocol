@@ -18,6 +18,10 @@ describe('routeForNotification', () => {
     expect(routeForNotification({ type: 'sign_request', requestId: 'req-9' })).toBe('/sign-request/req-9');
   });
 
+  it('un pago recibido abre el inicio, donde se ve el saldo', () => {
+    expect(routeForNotification({ type: 'payment_received', txHash: 'f'.repeat(64) })).toBe('/');
+  });
+
   it('un aviso sin datos o desconocido no navega', () => {
     expect(routeForNotification(undefined)).toBeNull();
     expect(routeForNotification({ type: 'trade_update' })).toBeNull();
