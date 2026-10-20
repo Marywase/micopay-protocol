@@ -3,6 +3,8 @@ import db from '../db/schema.js';
 import { authMiddleware } from '../middleware/auth.middleware.js';
 import { createRateLimiter } from '../middleware/rateLimit.middleware.js';
 import { notifyIncomingPayment } from '../services/paymentNotify.service.js';
+import { getPaymentHistory } from '../services/paymentHistory.service.js';
+import { UpstreamError } from '../utils/errors.js';
 
 // Cada envio llama una vez; el tope solo frena a quien lo use para leer Horizon gratis.
 const notifyRateLimit = createRateLimiter({
@@ -50,6 +52,32 @@ export async function paymentRoutes(app: FastifyInstance) {
         '[push] Payment notification requested',
       );
       return { notified: result.notified };
+    },
+  );
+  /**
+   * GET /payments/history
+   * Transferencias de la cuenta (enviadas y recibidas) leidas de la red, para
+   * el Historial. Ver paymentHistory.service.
+   * Response: { payments }
+   */
+  app.get(
+    '/payments/history',
+    { preHandler: [authMiddleware] },
+    async (request) => {
+      const me = await db.getOne<{ stellar_address: string }>(
+        'SELECT stellar_address FROM users WHERE id = $1',
+        [request.user.id],
+      );
+      if (!me) return { payments: [] };
+      try {
+        return { payments: await getPaymentHistory(me.stellar_address) };
+      } catch (err: any) {
+        throw new UpstreamError(
+          'PAYMENT_HISTORY_UNAVAILABLE',
+          'No pudimos leer tus transferencias de la red. Intenta de nuevo en un momento.',
+          `Horizon payments lookup failed: ${err?.message ?? err}`,
+        );
+      }
     },
   );
 }
