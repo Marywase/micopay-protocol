@@ -102,7 +102,7 @@ Start from the [Core Retail Flow milestone](https://github.com/ericmt-98/micopay
 
 1. **No browser history.** `App.tsx` does not push to `window.history`. Back/forward navigation and deep links do not work.
 2. **No wallet integration.** Stellar addresses are generated client-side. Freighter and other wallets are not connected.
-3. **MXNE is a placeholder.** The MXNE asset row in `Home.tsx` is grayed out and non-functional.
+3. **No MXNe.** The wallet holds XLM, USDC and CETES; the MXNe placeholder row was removed.
 4. **`ClaimQR` is not routable from the SPA.** No internal navigation path leads to it; it requires a direct URL.
 5. **CETES and Blend are fully simulated.** All DeFi transactions return mock hashes. No on-chain activity is triggered.
 6. **XLM rate is a static mock.** `20 MXN / 1 XLM` is a hardcoded demo constant — not a live feed.
