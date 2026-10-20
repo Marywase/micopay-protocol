@@ -12,7 +12,7 @@
 
 | Qué | Enlace |
 | --- | --- |
-| Video (producto funcionando + pitch, ≤3 min) | [pendiente: enlace de YouTube] |
+| Video (producto funcionando + pitch, ≤3 min) | [Reel en Instagram](https://www.instagram.com/reel/DeTDmYvIn7h/) |
 | Backend publicado (testnet) | [api.micopay.app/health](https://api.micopay.app/health) |
 | Contrato escrow — instancia USDC | [CDUI253F…YGAX](https://stellar.expert/explorer/testnet/contract/CDUI253FSVVVXUBI4SU3PEQIDNCYWGABGUOCRBIINRCJ4SJ5XVKWYGAX) |
 | Contrato escrow — instancia XLM | [CBFDXYUP…UNQWE](https://stellar.expert/explorer/testnet/contract/CBFDXYUPL4Q37JP3JD6JHFG6BQGNG6VOTTGMBTTPE5TYDHOVRY5UNQWE) |
