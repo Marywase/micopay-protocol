@@ -43,7 +43,8 @@
     "test:upstream-resilience": "node --import tsx src/tests/upstreamResilience.test.ts",
     "test:receiver-readiness": "cross-env ALLOW_IN_MEMORY_DB=true SECRET_ENCRYPTION_KEY=0000000000000000000000000000000000000000000000000000000000000000 node --import tsx src/tests/receiverReadiness.test.ts",
     "test:payment-notify": "cross-env ALLOW_IN_MEMORY_DB=true MOCK_STELLAR=true SECRET_ENCRYPTION_KEY=0000000000000000000000000000000000000000000000000000000000000000 node --import tsx src/tests/paymentNotification.test.ts",
-    "test:payment-history": "cross-env ALLOW_IN_MEMORY_DB=true SECRET_ENCRYPTION_KEY=0000000000000000000000000000000000000000000000000000000000000000 node --import tsx src/tests/paymentHistory.test.ts"
+    "test:payment-history": "cross-env ALLOW_IN_MEMORY_DB=true SECRET_ENCRYPTION_KEY=0000000000000000000000000000000000000000000000000000000000000000 node --import tsx src/tests/paymentHistory.test.ts",
+    "test:etherfuse-jwks": "node --import tsx src/tests/etherfuseJwks.test.ts"
   },
   "dependencies": {
     "@fastify/cors": "^8.5.0",
