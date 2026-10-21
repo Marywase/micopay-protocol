@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "43958756276",
+    "project_id": "micopay-55088",
+    "storage_bucket": "micopay-55088.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:43958756276:android:c36c4151055d17ec4f48e1",
+        "android_client_info": {
+          "package_name": "com.micopay.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCyHXNNNut-Z_-FhTKhkJFaIsuC8WXUhBY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:43958756276:android:3926785bf97dc19a4f48e1",
+        "android_client_info": {
+          "package_name": "com.micopay.app.debug"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCyHXNNNut-Z_-FhTKhkJFaIsuC8WXUhBY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

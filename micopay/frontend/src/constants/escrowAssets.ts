@@ -11,7 +11,7 @@
  * la pantalla, nunca que se pueda operar.
  *
  * LIMITE (D4 del plan): `key` = red + codigo identifica una opcion del catalogo,
- * no un token on-chain. Un activo emitido (USDC, MXNe) necesita ademas issuer o
+ * no un token on-chain. Un activo emitido (p. ej. USDC) necesita ademas issuer o
  * contrato; eso se resuelve cuando se habilite el primero (WP3).
  *
  * Sin campo de color: en Mercado/Rotulo el color significa digital frente a
@@ -60,7 +60,6 @@ export const ESCROW_ASSET_OPTIONS: readonly EscrowAssetOption[] = (
   [
     { key: 'stellar:XLM', code: 'XLM', network: 'stellar', networkLabel: 'Stellar', displayDecimals: 2 },
     { key: 'stellar:USDC', code: 'USDC', network: 'stellar', networkLabel: 'Stellar', displayDecimals: 2 },
-    { key: 'stellar:MXNE', code: 'MXNe', network: 'stellar', networkLabel: 'Stellar', displayDecimals: 2 },
     { key: 'xrpl:XRP', code: 'XRP', network: 'xrpl', networkLabel: 'XRPL', displayDecimals: 2 },
     { key: 'solana:USDC', code: 'USDC', network: 'solana', networkLabel: 'Solana', displayDecimals: 2 },
   ] as const

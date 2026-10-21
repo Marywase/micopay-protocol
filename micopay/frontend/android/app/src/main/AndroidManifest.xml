@@ -65,13 +65,13 @@
         obliga además al diálogo de "ubicación precisa" de Android 12+, que
         tiene peor tasa de aceptación, y exige justificación en Play Console.
 
-        POST_NOTIFICATIONS y la meta-data de Firebase Cloud Messaging también se
-        retiraron: no hay ningún plugin de push instalado, no existe
-        google-services.json, y el escaneo de cadenas del classes.dex del APK
-        compilado da 0 coincidencias para "messaging" y "PushNotification".
-        Ambos vuelven solos el día que se instale el plugin de notificaciones.
+        POST_NOTIFICATIONS volvió con @capacitor/push-notifications y
+        google-services.json (proyecto Firebase micopay-55088). Desde Android 13
+        el aviso no se muestra sin este permiso, y el plugin no lo declara: hay
+        que pedirlo aquí. La app lo solicita al iniciar sesión (lib/push.ts).
     -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <uses-feature android:name="android.hardware.camera" android:required="false" />
     <uses-feature android:name="android.hardware.location" android:required="false" />

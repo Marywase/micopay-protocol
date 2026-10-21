@@ -43,7 +43,6 @@ describe('Home — pending-trades badge', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUseWalletBalance.mockReturnValue({
-      balance: '250.00 MXNe',
       xlmBalance: '250.00',
       stellarAddress: 'GA7ABCDEF12345',
       loading: false,
@@ -122,7 +121,6 @@ describe('Home — XLM→MXN rate', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockUseWalletBalance.mockReturnValue({
-      balance: '250.00 MXNe',
       xlmBalance: '250.00',
       stellarAddress: 'GA7ABCDEF12345',
       loading: false,
@@ -172,9 +170,8 @@ describe('Home — non-custodial wallet balance states', () => {
     mockGetXlmMxnRate.mockResolvedValue({ rate: 18.42, source: 'coingecko', fetchedAt: '2026-06-25T12:00:00Z' });
   });
 
-  it('shows 0.00 MXNe when the account is not funded (Horizon 404)', async () => {
+  it('shows 0.00 XLM and no MXNe row when the account is not funded (Horizon 404)', async () => {
     mockUseWalletBalance.mockReturnValue({
-      balance: '0.00 MXNe',
       xlmBalance: '0.00',
       stellarAddress: 'GA7ABCDEF12345',
       loading: false,
@@ -187,13 +184,14 @@ describe('Home — non-custodial wallet balance states', () => {
     render(<Home {...createProps()} />);
 
     await waitFor(() => {
-      expect(screen.getAllByText('0.00 MXNe').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('0.00 XLM').length).toBeGreaterThanOrEqual(1);
     });
+    expect(screen.queryByText(/Peso Digital/)).toBeNull();
+    expect(screen.queryByText(/MXNe/i)).toBeNull();
   });
 
   it('shows loading state when Horizon is loading', async () => {
     mockUseWalletBalance.mockReturnValue({
-      balance: null,
       xlmBalance: null,
       stellarAddress: null,
       loading: true,
@@ -212,7 +210,6 @@ describe('Home — non-custodial wallet balance states', () => {
 
   it('shows fallback "--" when Horizon returns error', async () => {
     mockUseWalletBalance.mockReturnValue({
-      balance: null,
       xlmBalance: null,
       stellarAddress: 'GA7ABCDEF12345',
       loading: false,

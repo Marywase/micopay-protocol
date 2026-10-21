@@ -16,12 +16,17 @@ import i18n from '../i18n';
 
 vi.mock('../services/api', () => ({
   getTradeHistory: vi.fn(),
+  getPaymentHistory: vi.fn(),
 }));
 
-import { getTradeHistory, type TradeHistoryItem } from '../services/api';
+import { getPaymentHistory, getTradeHistory, type TradeHistoryItem } from '../services/api';
 import History from '../pages/History';
 
+/** Testing Library waits 1s by default; a busy CI runner can need longer to render the page. */
+const WAIT_MS = 10_000;
+
 const mockGetTradeHistory = vi.mocked(getTradeHistory);
+const mockGetPaymentHistory = vi.mocked(getPaymentHistory);
 
 beforeAll(async () => {
   await i18n.changeLanguage('es');
@@ -30,6 +35,7 @@ beforeAll(async () => {
 beforeEach(() => {
   vi.clearAllMocks();
   mockGetTradeHistory.mockResolvedValue([]);
+  mockGetPaymentHistory.mockResolvedValue([]);
 });
 
 afterEach(() => cleanup());
@@ -61,13 +67,13 @@ const lastCall = () => mockGetTradeHistory.mock.calls.at(-1);
 async function openTab(label: string) {
   const before = mockGetTradeHistory.mock.calls.length;
   fireEvent.click(screen.getByRole('button', { name: label }));
-  await waitFor(() => expect(mockGetTradeHistory.mock.calls.length).toBeGreaterThan(before));
+  await waitFor(() => expect(mockGetTradeHistory.mock.calls.length).toBeGreaterThan(before), { timeout: WAIT_MS });
 }
 
 describe('History · the selected tab is sent to the server', () => {
   it('"Todos" asks for the history with no status, like Home does', async () => {
     renderHistory();
-    await waitFor(() => expect(mockGetTradeHistory).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockGetTradeHistory).toHaveBeenCalledTimes(1), { timeout: WAIT_MS });
     expect(lastCall()).toEqual(['tok', undefined]);
   });
 
@@ -78,7 +84,7 @@ describe('History · the selected tab is sent to the server', () => {
     ['Reembolsados', 'refunded'],
   ])('"%s" sends status=%s', async (label, status) => {
     renderHistory();
-    await waitFor(() => expect(mockGetTradeHistory).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockGetTradeHistory).toHaveBeenCalledTimes(1), { timeout: WAIT_MS });
 
     await openTab(label);
 
@@ -87,7 +93,7 @@ describe('History · the selected tab is sent to the server', () => {
 
   it('going back to "Todos" drops the status again', async () => {
     renderHistory();
-    await waitFor(() => expect(mockGetTradeHistory).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockGetTradeHistory).toHaveBeenCalledTimes(1), { timeout: WAIT_MS });
 
     await openTab('Expirados');
     expect(lastCall()).toEqual(['tok', 'expired']);
@@ -96,9 +102,31 @@ describe('History · the selected tab is sent to the server', () => {
     expect(lastCall()).toEqual(['tok', undefined]);
   });
 
+  it('"Transferencias" asks for payments only, not for trades', async () => {
+    renderHistory();
+    await waitFor(() => expect(mockGetTradeHistory).toHaveBeenCalledTimes(1), { timeout: WAIT_MS });
+    mockGetTradeHistory.mockClear();
+    mockGetPaymentHistory.mockClear();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Transferencias' }));
+    await waitFor(() => expect(mockGetPaymentHistory).toHaveBeenCalledTimes(1), { timeout: WAIT_MS });
+
+    expect(mockGetTradeHistory).not.toHaveBeenCalled();
+  });
+
+  it('a trade tab does not ask for payments', async () => {
+    renderHistory();
+    await waitFor(() => expect(mockGetTradeHistory).toHaveBeenCalledTimes(1), { timeout: WAIT_MS });
+    mockGetPaymentHistory.mockClear();
+
+    await openTab('Expirados');
+
+    expect(mockGetPaymentHistory).not.toHaveBeenCalled();
+  });
+
   it('asks again each time a tab is opened, one request per switch', async () => {
     renderHistory();
-    await waitFor(() => expect(mockGetTradeHistory).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockGetTradeHistory).toHaveBeenCalledTimes(1), { timeout: WAIT_MS });
 
     await openTab('Cancelados');
     await openTab('Reembolsados');
@@ -117,10 +145,10 @@ describe('History · shows what the server returns', () => {
     );
 
     renderHistory();
-    await waitFor(() => expect(mockGetTradeHistory).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockGetTradeHistory).toHaveBeenCalledTimes(1), { timeout: WAIT_MS });
     await openTab('Expirados');
 
-    expect(await screen.findByText('$750 MXN')).toBeInTheDocument();
+    expect(await screen.findByText('$750 MXN', undefined, { timeout: WAIT_MS })).toBeInTheDocument();
     expect(screen.queryByText('Sin transacciones')).not.toBeInTheDocument();
   });
 
@@ -134,7 +162,7 @@ describe('History · shows what the server returns', () => {
     renderHistory();
     await openTab('Cancelados');
 
-    expect(await screen.findByText('$100 MXN')).toBeInTheDocument();
+    expect(await screen.findByText('$100 MXN', undefined, { timeout: WAIT_MS })).toBeInTheDocument();
     expect(screen.getByText('$200 MXN')).toBeInTheDocument();
     expect(screen.getByText('$300 MXN')).toBeInTheDocument();
   });
@@ -143,7 +171,7 @@ describe('History · shows what the server returns', () => {
     renderHistory();
     await openTab('Expirados');
 
-    expect(await screen.findByText('Sin transacciones')).toBeInTheDocument();
+    expect(await screen.findByText('Sin transacciones', undefined, { timeout: WAIT_MS })).toBeInTheDocument();
   });
 
   it('a failed request shows the error, not an empty list', async () => {
@@ -151,8 +179,8 @@ describe('History · shows what the server returns', () => {
 
     renderHistory();
 
-    await waitFor(() => expect(mockGetTradeHistory).toHaveBeenCalled());
-    await waitFor(() => expect(screen.queryByText('Cargando historial...')).not.toBeInTheDocument());
+    await waitFor(() => expect(mockGetTradeHistory).toHaveBeenCalled(), { timeout: WAIT_MS });
+    await waitFor(() => expect(screen.queryByText('Cargando historial...')).not.toBeInTheDocument(), { timeout: WAIT_MS });
     expect(screen.queryByText('Sin transacciones')).not.toBeInTheDocument();
   });
 });

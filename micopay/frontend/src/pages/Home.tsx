@@ -63,7 +63,6 @@ const Home = ({
   const [pendingError, setPendingError] = useState<MappedApiError | null>(null);
 
   const {
-    balance: mxneBalance,
     xlmBalance,
     stellarAddress: rawStellarAddress,
     loading: balanceLoading,
@@ -141,7 +140,7 @@ const Home = ({
     return () => { cancelled = true; };
   }, []);
 
-  const MXN_PEGGED = new Set(['MXNE', 'MXNe', 'CETES', 'GTOKEN', 'MXN']);
+  const MXN_PEGGED = new Set(['CETES', 'GTOKEN', 'MXN']);
 
   // Sin cotización no se muestra un monto: un FX inventado sobre dinero real da
   // cifras equivocadas (docs/AUDIT_MOBILE_MAINNET.md §3).
@@ -397,27 +396,6 @@ const Home = ({
                   {xlmBalance ?? "—"} XLM
                 </p>
                 <p className="num text-[11px] text-gris">{xlmMxnValue}</p>
-              </div>
-            </div>
-            {/* MXNE */}
-            <div className={`num flex items-center gap-4 p-4 ${balanceLoading ? 'opacity-40' : ''}`}>
-              <div className="w-10 h-10 rounded-sm border-2 border-tinta bg-verde flex items-center justify-center flex-shrink-0">
-                <span className="text-papel font-black text-xs">MXNE</span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-bold text-on-surface text-sm">
-                  Peso Digital (MXNE)
-                </p>
-                <p className="text-[11px] text-gris truncate font-mono">
-                  {stellarAddress
-                    ? `${stellarAddress.substring(0, 8)}…${stellarAddress.slice(-6)}`
-                    : "—"}
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="font-bold text-on-surface text-sm">
-                  {balanceLoading ? "—" : walletBalanceError ? "--" : mxneBalance}
-                </p>
               </div>
             </div>
             {/* USDC */}

@@ -262,8 +262,9 @@
     "noTrades": "No transactions",
     "locked": "Assets in escrow · ${{amount}} MXN",
     "pending": "Awaiting escrow lock",
-    "pollBanner": "Notifications are disabled. Inbox updates every 30 seconds.",
+    "pollBanner": "Without notifications you won't hear about new trades while the app is closed. While it's open, the inbox updates every 30 seconds.",
     "enableNotif": "Enable notifications",
+    "notifDenied": "You blocked them before: turn them on in phone Settings → Apps → Micopay → Notifications.",
     "buyer": "Buyer",
     "status": "Status",
     "filterAll": "All",
@@ -413,12 +414,17 @@
     "noAgentsDesc": "No nearby agent can handle ${{amount}} MXN right now. Try a different amount or later.",
     "changeAmount": "Change amount"
   },
+  "comingSoon": {
+    "badge": "Coming soon",
+    "desc": "We're finishing this feature. We'll let you know when it's ready.",
+    "back": "Back to Explore"
+  },
   "exploreScreen": {
     "title": "Explore",
     "subtitle": "Discover new ways to use your money",
     "investCetes": "Invest in CETES",
     "cetesRateBadge": "~{{rate}}% annual · Backed by the Mexican government",
-    "cetesDesc": "Buy tokenized CETES directly from your wallet using XLM, USDC or MXNe. Etherfuse custodies them on-chain — sell anytime and get your pesos via SPEI or back to your wallet.",
+    "cetesDesc": "Buy tokenized CETES directly from your wallet using XLM or USDC. Etherfuse custodies them on-chain — sell anytime and get your pesos via SPEI or back to your wallet.",
     "viewCetes": "View available CETES",
     "requestLoan": "Request a loan",
     "blendSubtitle": "Instant liquidity with Blend",
