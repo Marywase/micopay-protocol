@@ -545,6 +545,23 @@ export async function getTradeHistory(
   return res.data.trades;
 }
 
+/** Transferencia de la cuenta leida de la red (Enviar pago, pagos de fuera). */
+export interface PaymentHistoryItem {
+  id: string;
+  tx_hash: string;
+  created_at: string;
+  direction: 'in' | 'out';
+  amount: string;
+  asset: string;
+  counterparty: string;
+  counterparty_username: string | null;
+}
+
+export async function getPaymentHistory(token: string): Promise<PaymentHistoryItem[]> {
+  const res = await http.get("/payments/history", authHeaders(token));
+  return res.data.payments;
+}
+
 export async function getCurrentUser(
     token: string,
 ): Promise<CurrentUserProfile> {
@@ -576,6 +593,19 @@ export type Availability = 'online' | 'offline' | 'paused';
 
 export async function setAvailability(availability: Availability, token: string): Promise<void> {
   await http.patch('/users/me/availability', { availability }, authHeaders(token));
+}
+
+/** Guarda el token de Firebase del telefono para que el backend pueda avisar. */
+export async function registerPushToken(pushToken: string, token: string): Promise<void> {
+  await http.patch('/users/me/push_token', { push_token: pushToken }, authHeaders(token));
+}
+
+/**
+ * Despues de "Enviar pago": el backend lee la transaccion en la red y, si quien
+ * recibe es usuario de MicoPay, le avisa al telefono.
+ */
+export async function notifyPaymentSent(txHash: string, token: string): Promise<void> {
+  await http.post('/payments/notify', { tx_hash: txHash }, authHeaders(token));
 }
 
 // ─── DeFi: CETES ──────────────────────────────────────────────────────────
@@ -663,7 +693,7 @@ export async function getCETESRate(amount = "100"): Promise<CETESRate> {
 
 export async function buyCETES(
     amount: string,
-    sourceAsset: "XLM" | "USDC" | "MXNe",
+    sourceAsset: "XLM" | "USDC",
 ): Promise<CETESTxResult> {
   const res = await http.post("/defi/cetes/buy", { amount, sourceAsset });
   return res.data;
@@ -671,7 +701,7 @@ export async function buyCETES(
 
 export async function sellCETES(
     amount: string,
-    destAsset: "XLM" | "USDC" | "MXNe",
+    destAsset: "XLM" | "USDC",
 ): Promise<CETESTxResult> {
   const res = await http.post("/defi/cetes/sell", { amount, destAsset });
   return res.data;

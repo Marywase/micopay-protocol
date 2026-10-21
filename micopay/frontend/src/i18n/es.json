@@ -262,8 +262,9 @@
     "noTrades": "No hay operaciones",
     "locked": "Activos en garantía · ${{amount}} MXN",
     "pending": "Esperando bloqueo en garantía",
-    "pollBanner": "Las notificaciones están deshabilitadas. La bandeja se actualiza cada 30 segundos.",
+    "pollBanner": "Sin notificaciones no te enteras de operaciones nuevas con la app cerrada. Con la app abierta, la bandeja se actualiza cada 30 segundos.",
     "enableNotif": "Habilitar notificaciones",
+    "notifDenied": "Las bloqueaste antes: actívalas en Ajustes del teléfono → Apps → Micopay → Notificaciones.",
     "buyer": "Comprador",
     "status": "Estado",
     "filterAll": "Todos",
@@ -413,12 +414,17 @@
     "noAgentsDesc": "Ningún agente cercano puede atender ${{amount}} MXN ahora mismo. Intenta con otro monto o más tarde.",
     "changeAmount": "Cambiar monto"
   },
+  "comingSoon": {
+    "badge": "Próximamente",
+    "desc": "Estamos terminando esta función. Te avisaremos cuando esté lista.",
+    "back": "Volver a Explorar"
+  },
   "exploreScreen": {
     "title": "Explorar",
     "subtitle": "Descubre nuevas formas de usar tu dinero",
     "investCetes": "Invierte en CETES",
     "cetesRateBadge": "~{{rate}}% anual · Respaldo gobierno MX",
-    "cetesDesc": "Compra CETES tokenizados directamente desde tu wallet usando XLM, USDC o MXNe. Etherfuse los custodia on-chain — puedes venderlos en cualquier momento y recibir tus pesos vía SPEI o de vuelta a tu wallet.",
+    "cetesDesc": "Compra CETES tokenizados directamente desde tu wallet usando XLM o USDC. Etherfuse los custodia on-chain — puedes venderlos en cualquier momento y recibir tus pesos vía SPEI o de vuelta a tu wallet.",
     "viewCetes": "Ver CETES disponibles",
     "requestLoan": "Pide un préstamo",
     "blendSubtitle": "Liquidez instantánea con Blend",

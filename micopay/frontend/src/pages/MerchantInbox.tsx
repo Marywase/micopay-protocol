@@ -13,6 +13,7 @@ import { parseQRPayload } from '../utils/qrPayload';
 import { confirmCashReceived, cashConfirmErrorMessage } from '../utils/cashConfirm';
 import SupportLink from '../components/SupportLink';
 import { Pill } from '../components/ui';
+import { getPushPermission, requestPushPermission, type PushPermission } from '../lib/push';
 
 // ── Status display config ──────────────────────────────────────────────────
 
@@ -321,9 +322,15 @@ const MerchantInbox = ({ token, onBack }: MerchantInboxProps) => {
   const [scanView, setScanView] = useState<ScanView>({ type: 'idle' });
   const { scan } = useQRScanner();
 
-  // Push notifications require Firebase/FCM setup — disabled until configured.
-  // The polling fallback below (every 30s) covers trade updates in the meantime.
-  const pushEnabled = false;
+  // Con la app abierta Android no muestra el aviso: la bandeja se refresca
+  // sola cada 30 s de todos modos. El aviso es para cuando esta cerrada.
+  const [pushPermission, setPushPermission] = useState<PushPermission>('unsupported');
+  useEffect(() => {
+    getPushPermission().then(setPushPermission).catch(() => setPushPermission('unsupported'));
+  }, []);
+  const enableNotifications = useCallback(async () => {
+    setPushPermission(await requestPushPermission());
+  }, []);
 
 
   // ── Dismiss scan result ────────────────────────────────────────────────
@@ -408,10 +415,11 @@ const MerchantInbox = ({ token, onBack }: MerchantInboxProps) => {
     fetchTrades(activeFilter);
   }, [activeFilter, fetchTrades]);
 
-  // Polling fallback when push notifications are disabled
+  // Refresco mientras la bandeja esta a la vista, haya o no avisos: con la app
+  // abierta el aviso no se muestra, y un aviso perdido no deja la lista vieja.
   useEffect(() => {
-    if (pushEnabled || !token) {
-      return; // No polling needed if push works
+    if (!token) {
+      return;
     }
 
     const pollInterval = setInterval(() => {
@@ -424,7 +432,7 @@ const MerchantInbox = ({ token, onBack }: MerchantInboxProps) => {
     }, 30_000); // Poll every 30 seconds
 
     return () => clearInterval(pollInterval);
-  }, [pushEnabled, token, activeFilter]);
+  }, [token, activeFilter]);
 
   const filters = [
     { key: 'all', label: t('inbox.filterAll') },
@@ -454,8 +462,8 @@ const MerchantInbox = ({ token, onBack }: MerchantInboxProps) => {
       </header>
 
       <main className="pt-[calc(6rem+env(safe-area-inset-top))] px-6 pb-32">
-        {/* Push notification disabled banner with polling fallback */}
-        {!pushEnabled && token && (
+        {/* Sin permiso de avisos: el agente no se entera con la app cerrada */}
+        {(pushPermission === 'prompt' || pushPermission === 'denied') && token && (
           <div className="mb-4 rounded-sm p-4 bg-amber-50 border border-amber-200">
             <div className="flex items-start gap-3">
               <span className="material-symbols-outlined text-amber-600">notifications_off</span>
@@ -463,11 +471,15 @@ const MerchantInbox = ({ token, onBack }: MerchantInboxProps) => {
                 <p className="text-sm text-amber-900 font-medium">
                   {t('inbox.pollBanner')}
                 </p>
-                <p className="text-xs text-amber-800 mt-1">
-                  <a href="#" onClick={(e) => { e.preventDefault(); }} className="underline inline-flex min-h-12 items-center font-bold">
-                    {t('inbox.enableNotif')}
-                  </a>
-                </p>
+                {pushPermission === 'prompt' ? (
+                  <p className="text-xs text-amber-800 mt-1">
+                    <button type="button" onClick={() => { void enableNotifications(); }} className="underline inline-flex min-h-12 items-center font-bold">
+                      {t('inbox.enableNotif')}
+                    </button>
+                  </p>
+                ) : (
+                  <p className="text-xs text-amber-800 mt-1">{t('inbox.notifDenied')}</p>
+                )}
               </div>
             </div>
           </div>
