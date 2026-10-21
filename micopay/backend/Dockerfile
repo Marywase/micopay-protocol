@@ -14,7 +14,7 @@
 # silenciosa hasta la primera query real).
 
 # ── Etapa 1: compilar TypeScript ──────────────────────────────────────────
-FROM node:22-bookworm-slim AS build
+FROM node:22.23.4-bookworm-slim AS build
 WORKDIR /app/backend
 COPY backend/package.json backend/package-lock.json ./
 RUN npm ci
@@ -26,13 +26,13 @@ RUN npm run build
 # Nota: package.json declara typescript/tsx/@types en `dependencies`, así que
 # --omit=dev no los elimina (solo saca pino-pretty). No se toca package.json
 # aquí para no alterar el build de otros entornos; el costo es ~50 MB de imagen.
-FROM node:22-bookworm-slim AS deps
+FROM node:22.23.4-bookworm-slim AS deps
 WORKDIR /app/backend
 COPY backend/package.json backend/package-lock.json ./
 RUN npm ci --omit=dev
 
 # ── Etapa 3: imagen final ─────────────────────────────────────────────────
-FROM node:22-bookworm-slim AS runtime
+FROM node:22.23.4-bookworm-slim AS runtime
 ENV NODE_ENV=production
 WORKDIR /app/backend
 
