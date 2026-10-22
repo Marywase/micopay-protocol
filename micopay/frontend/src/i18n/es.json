@@ -344,6 +344,7 @@
     "footer": "CETES tokenizados por Etherfuse · Red Stellar · {{network}}",
     "incompleteInfo": "Información incompleta para confirmar el retiro.",
     "quoteExpired": "La cotización ha expirado. Por favor, solicita una nueva.",
+    "buyUnavailable": "La compra de CETES todavía no está disponible en esta versión. Tu saldo no se tocó.",
     "payWithWallet": "Con Cripto (DEX)",
     "payWithSpei": "Depósito SPEI",
     "depositTitle": "Depositar vía SPEI",

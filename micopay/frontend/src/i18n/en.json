@@ -344,6 +344,7 @@
     "footer": "CETES tokenized by Etherfuse · Stellar Network · {{network}}",
     "incompleteInfo": "Incomplete information to confirm withdrawal.",
     "quoteExpired": "The quote has expired. Please request a new one.",
+    "buyUnavailable": "Buying CETES is not available in this version yet. Your balance was not touched.",
     "payWithWallet": "With Crypto (DEX)",
     "payWithSpei": "SPEI Deposit",
     "depositTitle": "Deposit via SPEI",
