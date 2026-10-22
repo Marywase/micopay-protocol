@@ -26,11 +26,13 @@ export class EtherfuseV2Error extends Error {
 async function v2Fetch(path: string, init: RequestInit = {}): Promise<Response> {
   const apiKey = process.env.ETHERFUSE_API_KEY;
   if (!apiKey) throw new Error('ETHERFUSE_API_KEY no esta configurado');
-  // v2 usa Authorization: Bearer <key> (v1 era sin prefijo, hay que cuidarlo).
+  // v2 NO usa prefijo "Bearer": la API rechaza con 401 "Invalid API key format"
+  // (verificado contra api.sand.etherfuse.com el 2026-10-21). La key viene
+  // ya con su propio prefijo "api_sand:…" o "api_prod:…".
   const res = await breakerFetch(breakers.etherfuse, `${V2_API}${path}`, {
     ...init,
     headers: {
-      Authorization: `Bearer ${apiKey}`,
+      Authorization: apiKey,
       'Content-Type': 'application/json',
       ...init.headers,
     },
