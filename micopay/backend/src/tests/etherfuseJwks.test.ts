@@ -7,6 +7,7 @@ import {
   publicPemToJwk,
   rfc7638Thumbprint,
   getPublicJwks,
+  signLaunchToken,
   _resetJwksCacheForTests,
 } from '../lib/etherfuseJwt.js';
 
@@ -70,6 +71,52 @@ async function run() {
   } catch (err: any) {
     ok(String(err.message).includes('publica'));
   }
+
+  console.log('  7. signLaunchToken produce RS256 verificable con la publica');
+  process.env.ETHERFUSE_JWT_PRIVATE_KEY_PEM = privateKey;
+  process.env.ETHERFUSE_JWT_PUBLIC_KEY_PEM = publicKey;
+  _resetJwksCacheForTests();
+  const token = signLaunchToken('customer-abc-123', { ttlSeconds: 300, nowSec: 1700000000 });
+  const parts = token.split('.');
+  strictEqual(parts.length, 3);
+  const header = JSON.parse(Buffer.from(parts[0], 'base64url').toString('utf-8'));
+  const claims = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf-8'));
+  strictEqual(header.alg, 'RS256');
+  strictEqual(header.typ, 'JWT');
+  strictEqual(header.kid, jwk.kid);
+  strictEqual(claims.iss, 'https://api.micopay.app');
+  strictEqual(claims.sub, 'customer-abc-123');
+  strictEqual(claims.iat, 1700000000);
+  strictEqual(claims.exp, 1700000300);
+  ok(typeof claims.jti === 'string' && claims.jti.length > 0);
+  // verifica la firma usando la publica
+  const signedBytes = Buffer.from(`${parts[0]}.${parts[1]}`);
+  const sigBytes = Buffer.from(parts[2], 'base64url');
+  const vv = createVerify('RSA-SHA256');
+  vv.update(signedBytes);
+  ok(vv.verify(createPublicKey(publicKey), sigBytes), 'firma del JWT debe verificar');
+
+  console.log('  8. signLaunchToken sin subject, sin privada o ttl invalido lanza');
+  for (const [name, fn] of [
+    ['sin subject', () => signLaunchToken('')],
+    ['sin privada', () => {
+      delete process.env.ETHERFUSE_JWT_PRIVATE_KEY_PEM;
+      try { signLaunchToken('x'); } finally { process.env.ETHERFUSE_JWT_PRIVATE_KEY_PEM = privateKey; }
+    }],
+    ['ttl 0', () => signLaunchToken('x', { ttlSeconds: 0 })],
+    ['ttl 7200', () => signLaunchToken('x', { ttlSeconds: 7200 })],
+  ] as const) {
+    try { fn(); throw new Error(`${name} deberia haber lanzado`); } catch (err: any) {
+      ok(err.message, name);
+    }
+  }
+
+  console.log('  9. extraClaims se mezclan y el issuer es sobreescribible');
+  const t2 = signLaunchToken('u', { extraClaims: { aud: 'etherfuse-sandbox', scope: 'kyc' }, issuer: 'https://other.example', nowSec: 1700000000 });
+  const c2 = JSON.parse(Buffer.from(t2.split('.')[1], 'base64url').toString('utf-8'));
+  strictEqual(c2.aud, 'etherfuse-sandbox');
+  strictEqual(c2.scope, 'kyc');
+  strictEqual(c2.iss, 'https://other.example');
 
   console.log('\nAll Etherfuse JWKS tests passed.');
 }
