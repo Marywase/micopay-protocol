@@ -14,6 +14,12 @@
  */
 export const DEFI_TRADING_ENABLED = import.meta.env.VITE_ENABLE_DEFI_TRADING === 'true';
 export const SPEI_RAMP_ENABLED = import.meta.env.VITE_ENABLE_SPEI_RAMP === 'true';
+/**
+ * VITE_ENABLE_BANK_WITHDRAW: boton "Retirar a banco" (SPEI via Etherfuse v2).
+ * Prendido en el APK de testnet, apagado en Play hasta tener la organizacion
+ * de produccion aprobada y la cuenta de Play de organizacion.
+ */
+export const BANK_WITHDRAW_ENABLED = import.meta.env.VITE_ENABLE_BANK_WITHDRAW === 'true';
 
 /** CETES abre si hay algo que hacer ahi: comprar desde la billetera o por SPEI. */
 export const CETES_AVAILABLE = DEFI_TRADING_ENABLED || SPEI_RAMP_ENABLED;

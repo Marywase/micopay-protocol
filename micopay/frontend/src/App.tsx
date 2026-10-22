@@ -30,7 +30,8 @@ import DepositQR from "./pages/DepositQR";
 import SuccessScreen, { receiptFromServer, type SuccessReceipt } from "./pages/SuccessScreen";
 import Explore from "./pages/Explore";
 import ComingSoon from "./pages/ComingSoon";
-import { CETES_AVAILABLE, BLEND_AVAILABLE, DEFI_TRADING_ENABLED, SPEI_RAMP_ENABLED } from "./constants/features";
+import { CETES_AVAILABLE, BLEND_AVAILABLE, DEFI_TRADING_ENABLED, SPEI_RAMP_ENABLED, BANK_WITHDRAW_ENABLED } from "./constants/features";
+import BankWithdrawScreen from "./pages/BankWithdrawScreen";
 import History from "./pages/History";
 import TradeDetail from "./pages/TradeDetail";
 import CETESScreen from "./pages/CETESScreen";
@@ -186,6 +187,7 @@ function HomeRoute() {
           onNavigateCashout={() => { setFlow('cashout'); navigate('/cashout'); }}
           onNavigateDeposit={() => { setFlow('deposit'); navigate('/deposit'); }}
           onNavigateHistory={() => navigate('/history')}
+          onNavigateBankWithdraw={BANK_WITHDRAW_ENABLED ? () => navigate('/retirar-banco') : undefined}
           token={sessionUser?.token ?? null}
           merchantToken={sessionUser?.token ?? null}
           onNavigateInbox={() => navigate('/inbox')}
@@ -632,6 +634,15 @@ function CetesRoute() {
           showSpeiRamp={SPEI_RAMP_ENABLED}
       />
   );
+}
+
+function BankWithdrawRoute() {
+  const navigate = useNavigate();
+  const { sessionUser } = useAppCtx();
+  if (!BANK_WITHDRAW_ENABLED || !sessionUser?.token) {
+    return <ComingSoon title="Retirar a banco" icon="account_balance" onBack={() => navigate('/')} />;
+  }
+  return <BankWithdrawScreen onBack={() => navigate('/')} userToken={sessionUser.token} />;
 }
 
 /**
@@ -1461,6 +1472,7 @@ function App() {
                 <Route path="/success" element={<ProtectedRoute><SuccessRoute /></ProtectedRoute>} />
                 <Route path="/explore" element={<ProtectedRoute><ExploreRoute /></ProtectedRoute>} />
                 <Route path="/cetes" element={<ProtectedRoute><CetesRoute /></ProtectedRoute>} />
+                <Route path="/retirar-banco" element={<ProtectedRoute><BankWithdrawRoute /></ProtectedRoute>} />
                 {/* KYC-1: rutas explicitas por proposito. `/kyc` sigue
                     siendo el del anchor para no romper enlaces existentes. */}
                 <Route path="/kyc" element={<ProtectedRoute><KYCRoute /></ProtectedRoute>} />
