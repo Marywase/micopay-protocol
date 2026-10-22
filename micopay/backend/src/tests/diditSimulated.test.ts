@@ -12,14 +12,17 @@
  *
  * Lo que NO puede probar, por construcción: que esas suposiciones coincidan
  * con el contrato REAL de Didit. El simulador está hecho con las mismas
- * premisas que el verificador, así que no puede falsarlas. Siguen sin
- * comprobar:
+ * premisas que el verificador, así que no puede falsarlas. El 2026-10-16 se
+ * cotejaron contra la documentación de webhooks de Didit (v3) y coinciden,
+ * pero siguen sin probarse contra el sandbox real:
  *
  *   - que Didit firme con HMAC-SHA256 hex sobre el cuerpo crudo;
  *   - que las cabeceras se llamen `x-signature` y `x-timestamp`;
  *   - que el timestamp venga en segundos y no en milisegundos;
- *   - que los campos del cuerpo sean `session_id`, `status` y `decision.reason`;
- *   - que el vocabulario de estados sea el que asume `mapDiditStatus`.
+ *   - que los campos del cuerpo sean `session_id`, `status` y `decision`
+ *     con un `warnings[].risk` por módulo;
+ *   - que el vocabulario de estados sea el que asume `mapDiditStatus`
+ *     ("Approved", "Declined", ... con mayúsculas exactas).
  *
  * Si cualquiera de esas difiere, esta suite seguirá en verde y producción
  * fallará. Por eso el issue pide una comprobación contra el sandbox real, y
@@ -92,7 +95,12 @@ function buildDelivery(opts: {
   const body = JSON.stringify({
     session_id: opts.sessionId,
     status: opts.status,
-    decision: { reason: opts.status === "declined" ? "document_unreadable" : null },
+    decision: {
+      status: opts.status,
+      id_verifications: [
+        { status: opts.status, warnings: opts.status === "Declined" ? [{ risk: "DOCUMENT_UNREADABLE" }] : [] },
+      ],
+    },
     // Se manda a propósito: el handler ya NO debe creérselo.
     vendor_data: "00000000-0000-0000-0000-000000000000:2",
   });
@@ -135,7 +143,7 @@ async function testSignedApprovalRaisesTheLevel(app: any) {
   const user = await seedUser();
   const sessionId = await seedSession(user, 2);
 
-  const res = await deliver(app, { sessionId, status: "approved" });
+  const res = await deliver(app, { sessionId, status: "Approved" });
   strictEqual(res.statusCode, 200, "una entrega bien firmada se acepta");
   strictEqual(await levelOf(user), 2, "y aplica el nivel de la sesión");
   strictEqual(await sessionStatusOf(sessionId), "approved");
@@ -148,7 +156,7 @@ async function testWrongSecretIsRejected(app: any) {
   const user = await seedUser();
   const sessionId = await seedSession(user, 2);
 
-  const res = await deliver(app, { sessionId, status: "approved", secret: "otro_secreto" });
+  const res = await deliver(app, { sessionId, status: "Approved", secret: "otro_secreto" });
   strictEqual(res.statusCode, 401, "una firma con otro secreto se rechaza");
   strictEqual(await levelOf(user), 0, "y no toca el nivel");
   console.log("  ✓ firma con secreto equivocado: 401 y sin efecto");
@@ -158,7 +166,7 @@ async function testTamperedBodyIsRejected(app: any) {
   const user = await seedUser();
   const sessionId = await seedSession(user, 2);
 
-  const res = await deliver(app, { sessionId, status: "approved", tamperBodyAfterSigning: true });
+  const res = await deliver(app, { sessionId, status: "Approved", tamperBodyAfterSigning: true });
   strictEqual(res.statusCode, 401, "alterar el cuerpo tras firmar invalida la firma");
   strictEqual(await levelOf(user), 0);
   console.log("  ✓ cuerpo alterado después de firmar: 401");
@@ -170,7 +178,7 @@ async function testStaleDeliveryIsRejected(app: any) {
 
   // Diez minutos atrás: fuera de la ventana de cinco.
   const stale = Math.floor(Date.now() / 1000) - 600;
-  const res = await deliver(app, { sessionId, status: "approved", timestampSec: stale });
+  const res = await deliver(app, { sessionId, status: "Approved", timestampSec: stale });
   strictEqual(res.statusCode, 401, "una entrega vieja se rechaza (anti-replay)");
   strictEqual(await levelOf(user), 0);
   console.log("  ✓ entrega fuera de la ventana temporal: 401");
@@ -184,7 +192,7 @@ async function testVendorDataCannotChooseTheVictim(app: any) {
   const sessionId = await seedSession(owner, 1);
 
   // El cuerpo lleva `vendor_data` apuntando a otro usuario y nivel 2.
-  const res = await deliver(app, { sessionId, status: "approved" });
+  const res = await deliver(app, { sessionId, status: "Approved" });
 
   strictEqual(res.statusCode, 200);
   strictEqual(await levelOf(owner), 1, "manda la sesión: usuario y nivel salen de ella");
@@ -193,7 +201,7 @@ async function testVendorDataCannotChooseTheVictim(app: any) {
 }
 
 async function testUnknownSessionIsIgnored(app: any) {
-  const res = await deliver(app, { sessionId: `no_existe_${RUN}`, status: "approved" });
+  const res = await deliver(app, { sessionId: `no_existe_${RUN}`, status: "Approved" });
   // Se acepta el acuse para que el proveedor no reintente en bucle, pero no
   // muta nada.
   strictEqual(res.statusCode, 200, "se acusa recibo sin actuar");
@@ -206,13 +214,13 @@ async function testReplayIsIdempotent(app: any) {
   const user = await seedUser();
   const sessionId = await seedSession(user, 2);
 
-  await deliver(app, { sessionId, status: "approved" });
+  await deliver(app, { sessionId, status: "Approved" });
   const before = await db.getOne<{ kyc_level_verified_at: string | Date }>(
     "SELECT kyc_level_verified_at FROM users WHERE id = $1",
     [user],
   );
   await new Promise((r) => setTimeout(r, 25));
-  const second = await deliver(app, { sessionId, status: "approved" });
+  const second = await deliver(app, { sessionId, status: "Approved" });
   const after = await db.getOne<{ kyc_level_verified_at: string | Date }>(
     "SELECT kyc_level_verified_at FROM users WHERE id = $1",
     [user],
@@ -231,7 +239,7 @@ async function testLowerLevelCannotDowngrade(app: any) {
   const user = await seedUser(2);
   const sessionId = await seedSession(user, 1);
 
-  await deliver(app, { sessionId, status: "approved" });
+  await deliver(app, { sessionId, status: "Approved" });
   strictEqual(await levelOf(user), 2, "un nivel 1 aprobado no degrada un nivel 2");
   console.log("  ✓ aprobación de nivel inferior: no degrada");
 }
@@ -240,7 +248,7 @@ async function testRejectionGrantsNothing(app: any) {
   const user = await seedUser();
   const sessionId = await seedSession(user, 2);
 
-  const res = await deliver(app, { sessionId, status: "declined" });
+  const res = await deliver(app, { sessionId, status: "Declined" });
   strictEqual(res.statusCode, 200);
   strictEqual(await levelOf(user), 0, "un rechazo no otorga nivel");
   strictEqual(await sessionStatusOf(sessionId), "rejected", "y queda registrado");

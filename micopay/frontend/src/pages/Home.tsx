@@ -560,11 +560,13 @@ const Home = ({
             </div>
           )}
 
-          {/* El historial completo vive en su propia pantalla. Aqui era una lista
-              sin tope que crecia para siempre, empujando hacia abajo todo lo que
-              viniera despues y haciendo la pantalla mas lenta con cada operacion.
-              Inicio es para actuar; consultar el registro es otra intencion. */}
-          {trades.length > HOME_HISTORY_LIMIT && onNavigateHistory && (
+          {/* El historial completo vive en su propia pantalla. El boton tiene
+              que aparecer siempre que haya a donde ir: en /history esta la
+              pestana "Transferencias", que no tiene nada que ver con los
+              trades listados aqui. Antes lo escondiamos cuando habia 4 o
+              menos trades, pero eso dejaba el pantalla de transferencias
+              inaccesible para usuarios nuevos. */}
+          {onNavigateHistory && (
             <button
               onClick={onNavigateHistory}
               className="mt-4 w-full min-h-12 border-2 border-tinta text-tinta font-bold rounded-sm active:translate-x-[2px] active:translate-y-[2px] transition-all"
