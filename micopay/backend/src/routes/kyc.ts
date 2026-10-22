@@ -4,7 +4,12 @@ import { authMiddleware } from '../middleware/auth.middleware.js';
 import db from '../db/schema.js';
 import { UpstreamError, NotFoundError, BadRequestError } from '../utils/errors.js';
 import { createOnboardingUrl, getKycStatus } from '../services/etherfuse.service.js';
-import { createDiditSession, mapDiditStatus } from '../services/didit.service.js';
+import {
+  createDiditSession,
+  diditWorkflowIdForLevel,
+  extractDiditDecisionReason,
+  mapDiditStatus,
+} from '../services/didit.service.js';
 import { verifyDiditWebhookSignature } from '../lib/webhook-auth.js';
 import { CircuitOpenError, UpstreamTimeoutError } from '../lib/circuitBreaker.js';
 
@@ -35,17 +40,12 @@ interface DiditSessionRow {
   decision_reason: string | null;
 }
 
-/** `vendor_data` we send Didit at session creation — see didit.service.ts. */
-function encodeVendorData(userId: string, level: number): string {
-  return `${userId}:${level}`;
-}
-
 // KYC-1: aqui vivia `parseVendorData`, que leia usuario y nivel del cuerpo
 // del webhook para decidir a quien verificar. Se retira a proposito: ese dato
 // vuelve del proveedor y no puede ser la fuente de la decision. Ahora el
 // `session_id` se resuelve contra `kyc_didit_sessions` y de ahi salen el
-// usuario y el nivel. `encodeVendorData` se conserva porque seguimos
-// enviandolo al crear la sesion; solo dejo de creerselo al volver.
+// usuario y el nivel. `vendor_data` va solo como el user id: Didit pide un
+// identificador estable por persona, no uno por nivel.
 
 async function startEtherfuseKyc(request: any) {
   if (!process.env.ETHERFUSE_API_KEY) {
@@ -134,17 +134,33 @@ async function startDiditKyc(request: any) {
   const userId = request.user.id;
   const level = request.query?.level === '2' ? 2 : 1;
 
+  // Cada nivel tiene su workflow. Antes el nivel 2 usaba el del nivel 1 y al
+  // aprobarse grababa nivel 2 sin que nadie revisara el domicilio.
+  const workflowId = diditWorkflowIdForLevel(level);
+  if (!workflowId) {
+    throw new UpstreamError(
+      'DIDIT_NOT_CONFIGURED',
+      'La verificación de identidad no está disponible por el momento.',
+      `Didit workflow for level ${level} not configured`,
+      503,
+    );
+  }
+
   const user = await db.getOne<{ id: string }>('SELECT id FROM users WHERE id = $1', [userId]);
   if (!user) {
     throw new NotFoundError('User not found');
   }
 
   try {
-    const session = await createDiditSession({ vendorData: encodeVendorData(userId, level) });
+    const session = await createDiditSession({ vendorData: userId, workflowId });
 
+    // Didit devuelve la misma sesion si la persona tiene una sin terminar en
+    // ese workflow. Ya esta registrada: no se inserta dos veces. En una sola
+    // sentencia, para que un doble toque simultaneo no choque con el UNIQUE.
     await db.execute(
       `INSERT INTO kyc_didit_sessions (session_id, user_id, requested_level, status)
-       VALUES ($1, $2, $3, 'pending')`,
+       VALUES ($1, $2, $3, 'pending')
+       ON CONFLICT (session_id) DO NOTHING`,
       [session.sessionId, userId, level],
     );
 
@@ -297,7 +313,7 @@ export async function kycRoutes(app: FastifyInstance): Promise<void> {
         return reply.status(200).send({ received: true });
       }
 
-      const reason: string | null = json?.decision?.reason ?? null;
+      const reason = extractDiditDecisionReason(json?.decision);
 
       await db.execute(
         `UPDATE kyc_didit_sessions SET status = $1, decision_reason = $2, updated_at = NOW() WHERE session_id = $3`,

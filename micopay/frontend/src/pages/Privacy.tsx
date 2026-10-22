@@ -15,7 +15,7 @@ const Privacy = ({ onBack }: PrivacyProps) => {
         </button>
         <div>
           <h1 className="font-bold text-lg leading-tight">Política de Privacidad</h1>
-          <p className="text-[11px] text-gris">Última actualización: mayo 2026</p>
+          <p className="text-[11px] text-gris">Última actualización: octubre 2026</p>
         </div>
       </header>
 
@@ -30,9 +30,21 @@ const Privacy = ({ onBack }: PrivacyProps) => {
         <section className="bg-papel rounded-sm p-5 border-2 border-tinta/60 space-y-4">
           <h2 className="font-bold text-base text-tinta">1. Información que recopilamos</h2>
           <p className="text-sm text-gris leading-relaxed">
-            Recopilamos únicamente la información necesaria para operar el servicio: tu nombre de usuario,
+            Recopilamos la información necesaria para operar el servicio: tu nombre de usuario,
             tu dirección pública de Stellar y el historial de transacciones asociado a tu cuenta.
-            No recopilamos datos personales sensibles como nombre legal, CURP o datos bancarios completos.
+          </p>
+          <p className="text-sm text-gris leading-relaxed">
+            <strong>Verificación de identidad.</strong> Para operar efectivo↔cripto la ley nos obliga a
+            identificarte. Esa verificación la hace por cuenta de MicoPay nuestro proveedor Didit, en su
+            propia página: ahí capturas tu identificación oficial (INE o pasaporte) y una selfie, y Didit
+            puede validar tu CURP. La selfie y la comparación de tu rostro son <strong>datos biométricos,
+            que la ley considera datos personales sensibles</strong>, y solo se tratan con tu consentimiento
+            expreso, que das al iniciar la verificación.
+          </p>
+          <p className="text-sm text-gris leading-relaxed">
+            MicoPay no guarda tus documentos, tu selfie ni tu CURP en sus servidores. Solo guardamos el
+            resultado: si fuiste aprobado o rechazado, el nivel de verificación, la fecha y, en caso de
+            rechazo, un código del motivo (por ejemplo, documento vencido).
           </p>
         </section>
 
@@ -56,6 +68,13 @@ const Privacy = ({ onBack }: PrivacyProps) => {
             Las transacciones se registran en la red pública de Stellar, lo cual es inherente al
             funcionamiento de la cadena de bloques.
           </p>
+          <p className="text-sm text-gris leading-relaxed">
+            Trabajamos con estos proveedores, que tratan tus datos solo para prestarnos el servicio:
+          </p>
+          <ul className="text-sm text-gris leading-relaxed list-disc pl-5 space-y-1">
+            <li><strong>Didit:</strong> verificación de identidad (documento, selfie, CURP).</li>
+            <li><strong>Etherfuse:</strong> solo si usas CETES o SPEI; hace su propia verificación y recibe tu correo.</li>
+          </ul>
         </section>
 
         <section className="bg-papel rounded-sm p-5 border-2 border-tinta/60 space-y-4">

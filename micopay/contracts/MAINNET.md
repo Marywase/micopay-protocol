@@ -7,7 +7,8 @@ necesita fondos ya está hecho y probado (ver "Ensayo").
 
 | Qué | Valor |
 |---|---|
-| Cuenta de plataforma (mainnet) | `GBJBANDW2HTOTULIDH4CWSIEXXSGVTJTR2IFEIRJCQDX3NXDP63KQ6DK` (alias `micopay-platform-mainnet` del CLI `stellar`, solo en la PC de Eric) |
+| Cuenta de plataforma (mainnet) | `GBJBANDW2HTOTULIDH4CWSIEXXSGVTJTR2IFEIRJCQDX3NXDP63KQ6DK` (alias `micopay-platform-mainnet` del CLI `stellar`, solo en la PC de Eric). Despliega y es admin del contrato |
+| Wallet de comisiones (mainnet) | _pendiente: cuenta fría, ver "1. Contrato"_ |
 | USDC (Circle) | `USDC:GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN` |
 | SAC de USDC | `CCW67TSZV3SSS2HXMBQ5JFGCKJNXKZM7UQUWUZPUTHXSTZLEO7SJMI75` (verificado en cadena 2026-10-07) |
 | RPC | `https://mainnet.sorobanrpc.com` (respaldo: `https://soroban-rpc.mainnet.stellar.gateway.fm`, `https://rpc.lightsail.network`) |
@@ -19,11 +20,34 @@ necesita fondos ya está hecho y probado (ver "Ensayo").
 
 Requiere el fix de `lock` (PR #420) en main.
 
+Dos cuentas, cada una con su llave en un lugar distinto:
+
+| Cuenta | Qué hace | Dónde vive la llave |
+|---|---|---|
+| Plataforma (`SOURCE`, `micopay-platform-mainnet`) | Despliega, es `admin` del contrato y firma lo que firma el backend | CLI `stellar` de Eric y `PLATFORM_SECRET_KEY` del backend |
+| Wallet de comisiones (`PLATFORM_WALLET`) | Recibe la comisión de cada `release` (`platform_wallet` en `initialize`) | Fuera de línea. Nunca en el backend, en AWS ni en este script |
+
+Recibir no requiere firma, así que la wallet de comisiones no necesita estar
+en ningún servidor. `initialize` solo se puede llamar una vez: la wallet de
+comisiones tiene que existir antes de desplegar.
+
+Orden:
+
+1. Crear la cuenta fría fuera de línea y fondearla con XLM (reserva base más
+   la de la trustline).
+2. Agregarle la trustline de USDC (`USDC:GA5Z…KZVN`), firmada con la llave
+   fría fuera de línea. El script solo la revisa (código y emisor), no la crea.
+3. Correr el script con su dirección pública:
+
 ```bash
 cd micopay/contracts
-TOKEN=USDC bash deploy-mainnet.sh   # trustline USDC de la plataforma, deploy, initialize
-TOKEN=XLM  bash deploy-mainnet.sh   # segunda instancia, para XLM
+PLATFORM_WALLET=G... TOKEN=USDC bash deploy-mainnet.sh   # revisa la wallet, deploy, initialize
+PLATFORM_WALLET=G... TOKEN=XLM  bash deploy-mainnet.sh   # segunda instancia, para XLM
 ```
+
+Sin `PLATFORM_WALLET` el script se detiene. `ALLOW_HOT_PLATFORM_WALLET=1`
+conserva el comportamiento anterior (la comisión llega a `SOURCE`) y es solo
+para ensayos en testnet.
 
 ## 2. Backend (dos servicios, la misma imagen)
 

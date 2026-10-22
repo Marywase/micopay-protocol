@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter, HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { KYCRoute, AppContext, type AppCtx } from '../App';
+import { KYCRoute, DiditKYCRoute, ProviderOnboardingRoute, AppContext, type AppCtx } from '../App';
 import * as api from '../services/api';
 import * as secureStorage from '../services/secureStorage';
 
@@ -34,6 +34,13 @@ vi.mock('../constants/features', () => ({
 vi.mock('../services/api', () => ({
   startKYC: vi.fn(),
   getKYCStatus: vi.fn(),
+}));
+
+// El onboarding real consulta al servidor; aquí solo importa su botón de KYC.
+vi.mock('../pages/ProviderOnboarding', () => ({
+  default: ({ onOpenKyc }: { onOpenKyc: () => void }) => (
+    <button onClick={onOpenKyc}>open-kyc</button>
+  ),
 }));
 
 vi.mock('../services/secureStorage', () => ({
@@ -223,6 +230,42 @@ describe('KYCRoute — HashRouter and URL hash integrity', () => {
     expect(loc.hash).toBe('#/cetes');
     expect(loc.hash).not.toContain('#/#');
     expect(screen.queryByTestId('home-screen')).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * Un agente nuevo se verifica con Didit desde "Unirse a la Red", no con
+ * Etherfuse, y al aprobar vuelve al onboarding.
+ */
+describe('ProviderOnboardingRoute — KYC del agente', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockReadJSON.mockResolvedValue(null);
+    mockGetKYCStatus.mockResolvedValue({ status: 'pending' });
+  });
+
+  it('abre Didit y al aprobar vuelve a /join-network', async () => {
+    render(
+      <AppContext.Provider value={createMockAppCtx({ refreshProviderStatus: vi.fn() } as any)}>
+        <MemoryRouter initialEntries={['/join-network']}>
+          <LocationTracker />
+          <Routes>
+            <Route path="/join-network" element={<ProviderOnboardingRoute />} />
+            <Route path="/kyc/didit" element={<DiditKYCRoute />} />
+            <Route path="/kyc" element={<div data-testid="etherfuse-kyc">Etherfuse</div>} />
+          </Routes>
+        </MemoryRouter>
+      </AppContext.Provider>
+    );
+
+    mockGetKYCStatus.mockResolvedValue({ status: 'approved' });
+    fireEvent.click(screen.getByRole('button', { name: 'open-kyc' }));
+
+    await waitFor(() => expect(mockGetKYCStatus).toHaveBeenCalledWith('mock-session-token', 'didit'));
+    await waitFor(() => {
+      expect(screen.getByTestId('location-path')).toHaveTextContent('/join-network');
+    });
+    expect(screen.queryByTestId('etherfuse-kyc')).not.toBeInTheDocument();
   });
 });
 
