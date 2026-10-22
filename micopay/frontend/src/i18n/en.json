@@ -560,6 +560,7 @@
     "sessionNotAvailable": "Session not available",
     "sessionNotAvailableDesc": "We couldn't verify your session. Please log in again and try again.",
     "verifyIdentity": "Verify my identity",
+    "biometricConsent": "I agree that {{provider}}, on behalf of MicoPay, may capture my official ID, my CURP and a selfie, and compare my face with my ID photo. I understand that the selfie and my face are biometric data (sensitive personal data) and I give my express consent to their processing, as described in the Privacy Notice.",
     "retryVerification": "Retry verification",
     "sessionExpires": "Your verification session expires in ~15 minutes.",
     "continue": "Continue",

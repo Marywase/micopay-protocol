@@ -1,11 +1,11 @@
 // Didit hosted-verification client (#315 — [4b] KYC Provider Integration).
 //
-// ⚠️ UNVERIFIED AGAINST A LIVE SANDBOX: the endpoint path, header name, and
-// request/response field names below follow Didit's publicly documented v2
-// Hosted Verification API. This integration has not been exercised against
-// a real Didit sandbox account — confirm the shapes here against your own
-// sandbox (docs.didit.me) before relying on this in production, and adjust
-// this file only (the rest of the integration is provider-agnostic).
+// Sigue la API v3 de Didit (docs.didit.me, consultada 2026-10-16): sesion en
+// POST /v3/session/, estados con mayusculas y espacios exactos, y el motivo de
+// rechazo dentro de los `warnings` de cada modulo de `decision`.
+//
+// Probado de punta a punta contra el sandbox de Didit (2026-10-16/17): sesion,
+// webhook firmado y nivel 1 y 2 grabados en Postgres.
 import { breakers } from "../lib/breakers.js";
 import { breakerFetch, isIdempotentMethod } from "../lib/circuitBreaker.js";
 
@@ -31,14 +31,13 @@ function diditClient(path: string, init: RequestInit = {}): Promise<Response> {
 
 export interface CreateDiditSessionParams {
   /**
-   * Opaque string Didit echoes back verbatim in the webhook payload and the
-   * session decision. We encode `${userId}:${requestedLevel}` here — see
-   * kyc.ts's parseVendorData — so the webhook can identify the user/level
-   * without a separate lookup table keyed by anything Didit doesn't return.
+   * Identificador estable de la persona (nuestro user id). Didit lo usa para
+   * reutilizar sesiones y detectar duplicados. No decide nada al volver: el
+   * webhook resuelve usuario y nivel con `kyc_didit_sessions`.
    */
   vendorData: string;
-  /** Overrides DIDIT_WORKFLOW_ID for this call; falls back to the env var. */
-  workflowId?: string;
+  /** Workflow de Didit; cada nivel de KYC tiene el suyo. */
+  workflowId: string;
 }
 
 export interface DiditSession {
@@ -46,15 +45,19 @@ export interface DiditSession {
   url: string;
 }
 
-export async function createDiditSession(params: CreateDiditSessionParams): Promise<DiditSession> {
-  const workflowId = params.workflowId ?? process.env.DIDIT_WORKFLOW_ID;
-  if (!workflowId) {
-    throw new Error("DIDIT_WORKFLOW_ID not configured");
-  }
+/**
+ * Workflow de Didit para cada nivel. El nivel 2 agrega comprobante de
+ * domicilio, asi que NO puede caer al workflow del nivel 1: sin
+ * DIDIT_WORKFLOW_ID_L2 no hay nivel 2.
+ */
+export function diditWorkflowIdForLevel(level: 1 | 2): string | undefined {
+  return level === 2 ? process.env.DIDIT_WORKFLOW_ID_L2 : process.env.DIDIT_WORKFLOW_ID;
+}
 
-  const response = await diditClient("/v2/session/", {
+export async function createDiditSession(params: CreateDiditSessionParams): Promise<DiditSession> {
+  const response = await diditClient("/v3/session/", {
     method: "POST",
-    body: JSON.stringify({ workflow_id: workflowId, vendor_data: params.vendorData }),
+    body: JSON.stringify({ workflow_id: params.workflowId, vendor_data: params.vendorData }),
   });
   if (!response.ok) {
     throw new Error(`Didit API error: ${response.status} ${await response.text()}`);
@@ -72,11 +75,44 @@ export type DiditDecisionStatus = "approved" | "rejected" | "pending";
  * "did this session end up approved or not", never on which documents/fields
  * Didit collected — that stays entirely on Didit's side of the integration.
  */
+//
+// Didit compara los estados exactos ("Kyc Expired" con K mayuscula sola).
+// "Expired", "Abandoned" y "Kyc Expired" terminan la sesion sin aprobacion:
+// la persona tiene que abrir una nueva, asi que cuentan como rechazo. "In
+// Review", "Resubmitted" y los de en curso siguen pendientes.
 export function mapDiditStatus(raw: string | undefined | null): DiditDecisionStatus {
-  const normalized = (raw ?? "").toLowerCase();
-  if (normalized === "approved") return "approved";
-  if (normalized === "declined" || normalized === "rejected" || normalized === "abandoned") {
-    return "rejected";
+  switch (raw) {
+    case "Approved":
+      return "approved";
+    case "Declined":
+    case "Abandoned":
+    case "Expired":
+    case "Kyc Expired":
+      return "rejected";
+    default:
+      return "pending";
   }
-  return "pending";
+}
+
+/**
+ * Motivo del resultado en v3: no hay `decision.reason`; cada modulo de
+ * `decision` (id_verifications, liveness_checks, ...) trae `warnings` con un
+ * codigo `risk`. Solo se guardan esos codigos, nunca las descripciones ni
+ * otros datos del payload, que pueden llevar datos personales.
+ */
+export function extractDiditDecisionReason(decision: unknown): string | null {
+  if (!decision || typeof decision !== "object") return null;
+  const risks = new Set<string>();
+  for (const value of Object.values(decision as Record<string, unknown>)) {
+    if (!Array.isArray(value)) continue;
+    for (const item of value) {
+      const warnings = (item as { warnings?: unknown })?.warnings;
+      if (!Array.isArray(warnings)) continue;
+      for (const w of warnings) {
+        const risk = (w as { risk?: unknown })?.risk;
+        if (typeof risk === "string" && risk) risks.add(risk);
+      }
+    }
+  }
+  return risks.size ? [...risks].join(",").slice(0, 500) : null;
 }
