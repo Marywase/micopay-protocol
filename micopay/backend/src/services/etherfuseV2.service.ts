@@ -120,28 +120,63 @@ export interface SubmitVerificationRequest {
   address: VerificationAddress;
 }
 
-export type KycRequirementStatus = 'satisfied' | 'awaitingReview' | 'actionRequired' | 'requiresLaunch';
+/** Estado global del KYC (schema `VerificationStatus` de openapi-v2.json). */
+export type KycOverallStatus = 'notStarted' | 'inProgress' | 'submitted' | 'approved' | 'denied';
 
-export interface VerificationStatus {
-  overall: 'approved' | 'pending' | 'actionRequired' | 'rejected' | 'notStarted';
-  personalData?: KycRequirementStatus;
-  identityDocument?: KycRequirementStatus;
-  taxDocument?: KycRequirementStatus;
-  selfie?: KycRequirementStatus;
-  occupation?: KycRequirementStatus;
-  /** Mensaje legible devuelto por Etherfuse, si lo hay. */
-  userMessage?: string | null;
+export type KycRequirementStatus = 'pending' | 'awaitingReview' | 'satisfied' | 'actionRequired';
+
+export interface KycRequirement {
+  /** personalData, identityDocument, occupation, taxDocument, selfie, proofOfAddress, customerAgreement, ... */
+  type: string;
+  status: KycRequirementStatus;
+  /** true: solo lo puede hacer el usuario en /idv (selfie). */
+  requiresLaunch: boolean;
 }
 
-export async function submitVerification(customerOrgId: string, data: SubmitVerificationRequest): Promise<VerificationStatus> {
-  return v2Json<VerificationStatus>(`/organization/${encodeURIComponent(customerOrgId)}/verification`, {
+/** Respuesta de `GET /organization/{id}/kyc` (schema `Kyc`). */
+export interface KycStatus {
+  organizationId: string;
+  status: KycOverallStatus;
+  currentRejectionReason: string | null;
+  approvedAt: string | null;
+  needsWork: boolean;
+  userMessage: string | null;
+  /** Solo con `?requirements=true`; ausente hasta que el cliente se enruta a su pais. */
+  requirements?: KycRequirement[];
+}
+
+/** Nuestra columna users.etherfuse_kyc_status. */
+export type EtherfuseKycStatus = 'not_started' | 'review' | 'approved' | 'action_required' | 'rejected';
+
+/** Estado de Etherfuse (`kyc.status` + `needsWork`) a nuestra columna. */
+export function mapEtherfuseKyc(status: KycOverallStatus, needsWork: boolean): EtherfuseKycStatus {
+  if (status === 'approved') return 'approved';
+  if (status === 'denied') return 'rejected';
+  if (needsWork) return 'action_required';
+  if (status === 'notStarted') return 'not_started';
+  return 'review';
+}
+
+/** El POST responde 202: aceptado, no aplicado. El resultado llega por kycUpdated. */
+export interface SubmitVerificationResponse {
+  organizationId: string;
+  status: KycOverallStatus;
+}
+
+export async function submitVerification(customerOrgId: string, data: SubmitVerificationRequest): Promise<SubmitVerificationResponse> {
+  return v2Json<SubmitVerificationResponse>(`/organization/${encodeURIComponent(customerOrgId)}/verification`, {
     method: 'POST',
     body: JSON.stringify(data),
   });
 }
 
-export async function getVerificationStatus(customerOrgId: string): Promise<VerificationStatus> {
-  return v2Json<VerificationStatus>(`/organization/${encodeURIComponent(customerOrgId)}/verification/status`);
+/**
+ * Lee el KYC del cliente. Con `requirements: true` Etherfuse consulta a su
+ * proveedor de verificacion en cada llamada: no usarlo en un polling corto.
+ */
+export async function getKycStatus(customerOrgId: string, opts: { requirements?: boolean } = {}): Promise<KycStatus> {
+  const qs = opts.requirements ? '?requirements=true' : '';
+  return v2Json<KycStatus>(`/organization/${encodeURIComponent(customerOrgId)}/kyc${qs}`);
 }
 
 // ---- Launch de /idv -----------------------------------------------------
@@ -158,15 +193,19 @@ export interface LaunchForm {
  * form, Etherfuse tambien acepta GET con los campos como query (no documentado
  * tan claro; preferimos POST para que el token no termine en el historial).
  *
+ * KYC personal: `scope: verification` y `target: /idv`
+ * (docs.etherfuse.com/v2/guides/user-launch-flows). Cualquier otro valor lo
+ * rechaza el launch con `invalid_scope` / `invalid_target`.
+ *
  * @param customerOrgId  UUID de la personal org del usuario (= sub del JWT).
  * @param userInfo       email y nombre, exigidos en el JWT.
- * @param target         ruta del app (p.ej. "/kyc").
+ * @param target         ruta del app; `?lang=es` pinta el flujo en espanol.
  * @param returnUrl      a donde regresar si el usuario sale.
  */
 export function buildLaunchForm(
   customerOrgId: string,
   userInfo: { email: string; name: string },
-  target: string = '/kyc',
+  target: string = '/idv?lang=es',
   returnUrl?: string
 ): LaunchForm {
   const aud = `${V2_API.replace(/\/$/, '')}/auth/token`;
@@ -174,7 +213,7 @@ export function buildLaunchForm(
     ttlSeconds: 300,
     extraClaims: {
       aud,
-      scope: 'kyc',
+      scope: 'verification',
       email: userInfo.email,
       name: userInfo.name,
     },
@@ -245,7 +284,8 @@ export async function getPaymentAccount(customerOrgId: string, id: string): Prom
 }
 
 export async function listPaymentAccounts(customerOrgId: string): Promise<PaymentAccount[]> {
-  const r = await v2Json<{ data?: PaymentAccount[] } | PaymentAccount[]>(`/organization/${encodeURIComponent(customerOrgId)}/payment_account`);
+  // El listado es en plural; `/payment_account` es solo el POST.
+  const r = await v2Json<{ data?: PaymentAccount[] } | PaymentAccount[]>(`/organization/${encodeURIComponent(customerOrgId)}/payment_accounts`);
   return Array.isArray(r) ? r : (r.data ?? []);
 }
 
@@ -323,8 +363,11 @@ export interface FundingInstructions {
     recipientName?: string;
     /** Para rails de wallet (Stellar). */
     address?: string;
+    /** Ausente cuando no hace falta. */
     memo?: string;
-    chain?: string;
+    expiresAt?: string | null;
+    /** Transaccion sin firmar que arma Etherfuse; en Stellar, XDR en base64. */
+    preparedTransaction?: { transaction: string; refreshAfter: string | null };
   };
 }
 
@@ -332,6 +375,8 @@ export interface Order {
   id: string;
   organizationId: string;
   status: OrderStatus;
+  /** Solo con status 'failed'. */
+  failure?: { code: string; message: string } | null;
   memo: string | null;
   source: OrderAmount;
   destination: OrderAmount;
@@ -363,7 +408,7 @@ export async function getOrder(customerOrgId: string, id: string): Promise<Order
 }
 
 export async function refreshFundingInstructions(customerOrgId: string, id: string): Promise<Order> {
-  return v2Json<Order>(`/organization/${encodeURIComponent(customerOrgId)}/order/${encodeURIComponent(id)}/refresh_funding_instructions`, {
+  return v2Json<Order>(`/organization/${encodeURIComponent(customerOrgId)}/order/${encodeURIComponent(id)}/funding_instructions/refresh`, {
     method: 'POST',
     body: '{}',
   });
@@ -387,26 +432,47 @@ export interface WebhookSubscription {
   secret?: string;
 }
 
+// Las suscripciones son de nuestra organizacion y cubren a todas las hijas:
+// la ruta no lleva organization id.
 export async function createWebhookSubscription(
-  customerOrgId: string,
   req: { url: string; eventType: WebhookEventType }
 ): Promise<WebhookSubscription> {
-  return v2Json<WebhookSubscription>(`/organization/${encodeURIComponent(customerOrgId)}/webhook_subscription`, {
+  return v2Json<WebhookSubscription>('/webhook_subscription', {
     method: 'POST',
     body: JSON.stringify(req),
   });
 }
 
-export async function listWebhookSubscriptions(customerOrgId: string): Promise<WebhookSubscription[]> {
-  const r = await v2Json<{ data?: WebhookSubscription[] } | WebhookSubscription[]>(`/organization/${encodeURIComponent(customerOrgId)}/webhook_subscription`);
+export async function listWebhookSubscriptions(): Promise<WebhookSubscription[]> {
+  const r = await v2Json<{ data?: WebhookSubscription[] } | WebhookSubscription[]>('/webhook_subscriptions');
   return Array.isArray(r) ? r : (r.data ?? []);
 }
 
 /**
+ * JSON canonico segun RFC 8785 (JCS) para valores que salen de JSON.parse:
+ * llaves ordenadas por unidades UTF-16 y numeros/strings con la serializacion
+ * de ECMAScript, que es la que JCS adopta.
+ */
+export function canonicalJson(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  const obj = value as Record<string, unknown>;
+  const keys = Object.keys(obj).filter((k) => obj[k] !== undefined).sort();
+  return `{${keys.map((k) => `${JSON.stringify(k)}:${canonicalJson(obj[k])}`).join(',')}}`;
+}
+
+function hmacMatches(secret: Buffer, data: Buffer, providedHex: string): boolean {
+  const expectedHex = createHmac('sha256', secret).update(data).digest('hex');
+  if (expectedHex.length !== providedHex.length) return false;
+  return timingSafeEqual(Buffer.from(expectedHex), Buffer.from(providedHex));
+}
+
+/**
  * Verifica la firma de un webhook de Etherfuse. Header: `X-Signature: sha256=<hex>`.
- * HMAC-SHA256 sobre el body **crudo** (bytes tal como llegaron) con el secret
- * decodificado desde base64url. El route handler debe preservar el raw body;
- * ver docs/webhooks de Etherfuse (RFC 8785 canonicalizado del lado del emisor).
+ * Etherfuse firma con HMAC-SHA256 el body canonicalizado (RFC 8785), con el
+ * secret decodificado desde base64url (docs.etherfuse.com/v2/webhooks). Se
+ * compara primero con los bytes crudos, que es lo que llega cuando el emisor
+ * ya manda el body canonico, y si no, con la forma canonica del JSON.
  *
  * Devuelve `true` solo si la firma coincide; `false` sin lanzar en todos los
  * casos de error (header ausente, mal formato, etc.) para que la ruta pueda
@@ -422,11 +488,46 @@ export function verifyWebhookSignature(rawBody: Buffer | string, headerValue: st
     secret = Buffer.from(base64urlSecret, 'base64url');
   } catch { return false; }
   const bodyBuf = typeof rawBody === 'string' ? Buffer.from(rawBody) : rawBody;
-  const expectedHex = createHmac('sha256', secret).update(bodyBuf).digest('hex');
-  if (expectedHex.length !== providedHex.length) return false;
-  const a = Buffer.from(expectedHex);
-  const b = Buffer.from(providedHex);
-  return timingSafeEqual(a, b);
+  if (hmacMatches(secret, bodyBuf, providedHex)) return true;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(bodyBuf.toString('utf-8'));
+  } catch { return false; }
+  return hmacMatches(secret, Buffer.from(canonicalJson(parsed), 'utf-8'), providedHex);
+}
+
+// ---- Payloads de webhooks (v2) ------------------------------------------
+// Forma real de los eventos (webhooks.* en openapi-v2.json). No hay sobre
+// `data`: el id de la organizacion y el objeto van en la raiz.
+
+export interface KycUpdatedEvent {
+  event: 'kycUpdated';
+  eventId: string;
+  occurredAt: string;
+  organizationId: string;
+  kyc: {
+    status: KycOverallStatus;
+    approved: boolean;
+    needsWork: boolean;
+    /** Lo que el cliente tiene que corregir cuando needsWork; si no, null. */
+    userMessage: string | null;
+  };
+}
+
+export interface OrderUpdatedEvent {
+  event: 'orderUpdated';
+  eventId: string;
+  occurredAt: string;
+  order: Order;
+}
+
+export interface PaymentAccountUpdatedEvent {
+  event: 'paymentAccountUpdated';
+  eventId: string;
+  occurredAt: string;
+  organizationId: string;
+  paymentAccount: PaymentAccount;
 }
 
 // Para pruebas: permite inyectar hosts sin tocar process.env.

@@ -1,6 +1,12 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import db from '../db/schema.js';
-import { verifyWebhookSignature, EtherfuseV2Error } from '../services/etherfuseV2.service.js';
+import {
+  verifyWebhookSignature,
+  EtherfuseV2Error,
+  type KycUpdatedEvent,
+  type OrderUpdatedEvent,
+  type PaymentAccountUpdatedEvent,
+} from '../services/etherfuseV2.service.js';
 import {
   applyKycUpdate,
   applyOrderUpdate,
@@ -76,20 +82,27 @@ export async function bankWithdrawWebhookRoutes(app: FastifyInstance) {
 
   /**
    * orderUpdated: refresca el estado desde Etherfuse. Si cambia a 'completed'
-   * manda una push al usuario. El cuerpo que manda Etherfuse incluye el
-   * orderId; el customerOrgId esta ligado al secret (una subscripcion por org).
+   * manda una push al usuario. El cuerpo trae la orden completa en `order`
+   * (con su organizationId); se re-lee de Etherfuse en vez de confiar en el.
    */
   app.post('/defi/ramp/webhook/order-updated', async (request, reply) => {
     if (!verifyOrDeny('orderUpdated', request, reply)) return;
-    const body = request.body as { data?: { id?: string; organizationId?: string } } | undefined;
-    const orderId = body?.data?.id;
-    const customerOrgId = body?.data?.organizationId;
+    const body = request.body as Partial<OrderUpdatedEvent> | undefined;
+    const orderId = body?.order?.id;
+    const customerOrgId = body?.order?.organizationId;
     if (!orderId || !customerOrgId) {
+      request.log.warn({ event: body?.event, eventId: body?.eventId }, 'webhook orderUpdated: payload sin order.id/organizationId');
       return reply.status(400).send({ code: 'bad-payload' });
     }
+    request.log.info(
+      { eventId: body?.eventId, orderId, status: body?.order?.status, failure: body?.order?.failure?.code ?? null },
+      'webhook orderUpdated',
+    );
     try {
       const result = await applyOrderUpdate(customerOrgId, orderId);
-      if (!result) return reply.status(404).send({ code: 'unknown-order' });
+      // Orden que no es nuestra (p.ej. de una prueba por script): 200 para que
+      // Etherfuse no la reintente.
+      if (!result) return { ok: true, ignored: 'unknown-order' };
 
       if (result.previousStatus !== 'completed' && result.order.status === 'completed') {
         const row = await db.getOne<{ clabe_last4: string | null; destination_mxn: string | null }>(
@@ -118,12 +131,28 @@ export async function bankWithdrawWebhookRoutes(app: FastifyInstance) {
    */
   app.post('/defi/ramp/webhook/kyc-updated', async (request, reply) => {
     if (!verifyOrDeny('kycUpdated', request, reply)) return;
-    const body = request.body as { data?: { organizationId?: string } } | undefined;
-    const customerOrgId = body?.data?.organizationId;
-    if (!customerOrgId) return reply.status(400).send({ code: 'bad-payload' });
+    const body = request.body as Partial<KycUpdatedEvent> | undefined;
+    const customerOrgId = body?.organizationId;
+    if (!customerOrgId) {
+      request.log.warn({ event: body?.event, eventId: body?.eventId }, 'webhook kycUpdated: payload sin organizationId');
+      return reply.status(400).send({ code: 'bad-payload' });
+    }
+    // userMessage es el unico lugar donde Etherfuse dice que corregir; se
+    // loguea (no trae datos personales, es texto de Etherfuse).
+    request.log.info(
+      {
+        eventId: body?.eventId,
+        organizationId: customerOrgId,
+        status: body?.kyc?.status,
+        approved: body?.kyc?.approved,
+        needsWork: body?.kyc?.needsWork,
+        userMessage: body?.kyc?.userMessage ?? null,
+      },
+      'webhook kycUpdated',
+    );
     try {
-      const status = await applyKycUpdate(customerOrgId);
-      if (!status) return reply.status(404).send({ code: 'unknown-customer' });
+      const status = await applyKycUpdate(customerOrgId, body?.kyc?.userMessage ?? null);
+      if (!status) return { ok: true, ignored: 'unknown-customer' };
       return { ok: true };
     } catch (err) {
       return catchUpstream(reply, err, request);
@@ -136,10 +165,17 @@ export async function bankWithdrawWebhookRoutes(app: FastifyInstance) {
    */
   app.post('/defi/ramp/webhook/payment-account-updated', async (request, reply) => {
     if (!verifyOrDeny('paymentAccountUpdated', request, reply)) return;
-    const body = request.body as { data?: { organizationId?: string; id?: string } } | undefined;
-    const customerOrgId = body?.data?.organizationId;
-    const paymentAccountId = body?.data?.id;
-    if (!customerOrgId || !paymentAccountId) return reply.status(400).send({ code: 'bad-payload' });
+    const body = request.body as Partial<PaymentAccountUpdatedEvent> | undefined;
+    const customerOrgId = body?.organizationId;
+    const paymentAccountId = body?.paymentAccount?.id;
+    if (!customerOrgId || !paymentAccountId) {
+      request.log.warn({ event: body?.event, eventId: body?.eventId }, 'webhook paymentAccountUpdated: payload sin organizationId/paymentAccount.id');
+      return reply.status(400).send({ code: 'bad-payload' });
+    }
+    request.log.info(
+      { eventId: body?.eventId, organizationId: customerOrgId, paymentAccountId, status: body?.paymentAccount?.status },
+      'webhook paymentAccountUpdated',
+    );
     try {
       await applyPaymentAccountUpdate(customerOrgId, paymentAccountId);
       return { ok: true };

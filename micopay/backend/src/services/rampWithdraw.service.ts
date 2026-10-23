@@ -6,22 +6,26 @@
 // Decisiones base en docs/PLAN_RETIRO_BANCO_2026-10-20.md.
 
 import db from '../db/schema.js';
+import { getEffectiveKycLevel } from './kyc-gate.service.js';
 import {
   EtherfuseV2Error,
   type FundingInstructions,
+  type EtherfuseKycStatus,
+  type KycStatus,
   type LaunchForm,
   type Order,
   type OrderStatus,
   type PaymentAccount,
   type Quote,
-  type VerificationStatus,
+  type SubmitVerificationResponse,
   buildLaunchForm,
   createOrder,
   createPersonalOrg,
   createQuote,
+  getKycStatus,
+  mapEtherfuseKyc,
   getOrder,
   getPaymentAccount,
-  getVerificationStatus,
   registerPaymentAccount,
   submitVerification,
 } from './etherfuseV2.service.js';
@@ -62,26 +66,26 @@ export interface BankWithdrawStatus {
   kycMessage?: string | null;
 }
 
-export type EtherfuseKycStatus = 'not_started' | 'review' | 'approved' | 'action_required' | 'rejected';
+export { mapEtherfuseKyc, type EtherfuseKycStatus };
 
 interface UserRow {
   id: string;
   stellar_address: string | null;
   username: string | null;
-  kyc_status: string;
   etherfuse_customer_id: string | null;
   etherfuse_bank_account_id: string | null;
   etherfuse_wallet_account_id: string | null;
   etherfuse_kyc_status: EtherfuseKycStatus;
+  etherfuse_kyc_message: string | null;
   etherfuse_kyc_updated_at: string | null;
 }
 
 async function loadUser(userId: string): Promise<UserRow> {
   const user = await db.getOne<UserRow>(
-    `SELECT id, stellar_address, username, kyc_status,
+    `SELECT id, stellar_address, username,
             etherfuse_customer_id, etherfuse_bank_account_id,
             etherfuse_wallet_account_id, etherfuse_kyc_status,
-            etherfuse_kyc_updated_at
+            etherfuse_kyc_message, etherfuse_kyc_updated_at
        FROM users WHERE id = $1`,
     [userId],
   );
@@ -89,12 +93,47 @@ async function loadUser(userId: string): Promise<UserRow> {
   return user;
 }
 
+/**
+ * Re-lee el KYC desde Etherfuse y lo guarda. Lo usa el webhook y tambien la
+ * pantalla mientras el usuario esta en revision, por si un webhook se perdio.
+ * `userMessage` solo se sobrescribe cuando trae algo: GET /kyc no repite el
+ * mensaje que llego por webhook.
+ */
+async function refreshEtherfuseKyc(userId: string, customerOrgId: string, message?: string | null): Promise<{ mapped: EtherfuseKycStatus; kyc: KycStatus }> {
+  const kyc = await getKycStatus(customerOrgId);
+  const mapped = mapEtherfuseKyc(kyc.status, kyc.needsWork);
+  const newMessage = message ?? kyc.userMessage;
+  await db.execute(
+    `UPDATE users
+        SET etherfuse_kyc_status = $1,
+            etherfuse_kyc_message = CASE WHEN $1 = 'approved' THEN NULL ELSE COALESCE($2, etherfuse_kyc_message) END,
+            etherfuse_kyc_updated_at = NOW()
+      WHERE id = $3`,
+    [mapped, newMessage ?? null, userId],
+  );
+  return { mapped, kyc };
+}
+
 export async function getBankWithdrawStatus(userId: string): Promise<BankWithdrawStatus> {
   const u = await loadUser(userId);
-  // Didit es la verificacion basica que ya existe en P2P.
-  if (u.kyc_status !== 'approved') return { stage: 'needs_didit' };
+  // Didit es la verificacion basica que ya existe en P2P. El webhook de Didit
+  // escribe kyc_level (no kyc_status), con vencimiento.
+  if ((await getEffectiveKycLevel(userId)) < 1) return { stage: 'needs_didit' };
   if (!u.etherfuse_customer_id) return { stage: 'needs_kyc' };
-  if (u.etherfuse_kyc_status !== 'approved') return { stage: 'kyc_review' };
+  if (u.etherfuse_kyc_status !== 'approved') {
+    try {
+      const { mapped, kyc } = await refreshEtherfuseKyc(userId, u.etherfuse_customer_id);
+      // La org existe pero los datos no llegaron (p.ej. Etherfuse rechazo el
+      // POST): se vuelve a mostrar el formulario en vez de "en revision".
+      if (mapped === 'not_started') return { stage: 'needs_kyc' };
+      if (mapped !== 'approved') {
+        return { stage: 'kyc_review', kycMessage: kyc.userMessage ?? u.etherfuse_kyc_message };
+      }
+    } catch {
+      // Etherfuse no responde: se muestra lo ultimo que sabemos.
+      return { stage: 'kyc_review', kycMessage: u.etherfuse_kyc_message };
+    }
+  }
   if (!u.etherfuse_bank_account_id) return { stage: 'needs_bank' };
   return {
     stage: 'ready',
@@ -140,7 +179,7 @@ export interface StartKycRequest {
 
 export interface StartKycResponse {
   customerOrgId: string;
-  verification: VerificationStatus;
+  verification: SubmitVerificationResponse;
   launch: LaunchForm;
 }
 
@@ -180,47 +219,32 @@ export async function startKyc(userId: string, req: StartKycRequest): Promise<St
     address: req.address,
   });
 
-  // 3. Dejar al usuario pasar a 'review' en Etherfuse. Si Etherfuse ya responde
-  // 'approved', el webhook kycUpdated nos lo movera a 'approved'.
-  const initialEtherfuseKyc: EtherfuseKycStatus = verification.overall === 'approved' ? 'approved' : 'review';
+  // 3. El POST responde 202 (aceptado, no aplicado): el usuario queda en
+  // revision hasta que kycUpdated diga otra cosa.
   await db.execute(
-    `UPDATE users SET etherfuse_kyc_status = $1, etherfuse_kyc_updated_at = NOW() WHERE id = $2`,
-    [initialEtherfuseKyc, userId],
+    `UPDATE users SET etherfuse_kyc_status = $1, etherfuse_kyc_message = NULL, etherfuse_kyc_updated_at = NOW() WHERE id = $2`,
+    [mapEtherfuseKyc(verification.status, false) === 'approved' ? 'approved' : 'review', userId],
   );
 
-  const launch = buildLaunchForm(
-    org.id,
-    { email: req.email, name: req.displayName },
-    '/kyc',
-    undefined,
-  );
+  const launch = buildLaunchForm(org.id, { email: req.email, name: req.displayName });
 
   return { customerOrgId: org.id, verification, launch };
 }
 
 /**
  * Llamado por el webhook kycUpdated. Re-lee el estado desde Etherfuse (no
- * confiamos en el body del aviso) y actualiza la base.
+ * confiamos en el body del aviso) y actualiza la base. El `userMessage` si se
+ * toma del aviso: es el unico lugar donde Etherfuse dice que corregir.
  */
-export async function applyKycUpdate(customerOrgId: string): Promise<VerificationStatus | null> {
+export async function applyKycUpdate(customerOrgId: string, userMessage: string | null): Promise<EtherfuseKycStatus | null> {
   const user = await db.getOne<{ id: string }>(
     `SELECT id FROM users WHERE etherfuse_customer_id = $1`,
     [customerOrgId],
   );
   if (!user) return null;
 
-  const status = await getVerificationStatus(customerOrgId);
-  const mapped: EtherfuseKycStatus =
-    status.overall === 'approved' ? 'approved' :
-    status.overall === 'rejected' ? 'rejected' :
-    status.overall === 'actionRequired' ? 'action_required' :
-    status.overall === 'notStarted' ? 'not_started' :
-    'review';
-  await db.execute(
-    `UPDATE users SET etherfuse_kyc_status = $1, etherfuse_kyc_updated_at = NOW() WHERE id = $2`,
-    [mapped, user.id],
-  );
-  return status;
+  const { mapped } = await refreshEtherfuseKyc(user.id, customerOrgId, userMessage);
+  return mapped;
 }
 
 // ---- Payment accounts ---------------------------------------------------
@@ -401,9 +425,8 @@ export interface WithdrawOrderResult {
   orderId: string;
   status: OrderStatus;
   fundingInstructions?: FundingInstructions;
-  /** Para USDC directo, Etherfuse puede devolver una preparedTransaction;
-   *  la app la revisa (decisión 7) antes de firmarla. */
-  preparedTransaction?: unknown;
+  /** XDR sin firmar que arma Etherfuse; la app la revisa (decisión 7) antes de firmarla. */
+  preparedTransaction?: string;
 }
 
 /**
@@ -440,10 +463,10 @@ export async function confirmWithdrawOrder(userId: string, quoteId: string): Pro
     orderId: order.id,
     status: order.status,
     fundingInstructions: order.fundingInstructions,
-    // La API no documenta preparedTransaction en el schema de Order; lo que
-    // Etherfuse manda en el campo depende del rail. Lo propagamos tal cual si
-    // viene, la app sabe que esperarlo para rails tipo wallet.
-    preparedTransaction: (order as unknown as { preparedTransaction?: unknown }).preparedTransaction,
+    // En rails de wallet Etherfuse arma la transaccion en
+    // fundingInstructions.destination.preparedTransaction (XDR en Stellar).
+    // La app la valida (decision 7) antes de firmarla.
+    preparedTransaction: order.fundingInstructions?.destination?.preparedTransaction?.transaction,
   };
 }
 
