@@ -288,6 +288,33 @@ export async function sendPaymentReceivedNotification(
   );
 }
 
+export interface BankWithdrawCompletedPayload {
+  orderId: string;
+  amountMxn: string;
+  clabeLast4: string | null;
+}
+
+export function buildBankWithdrawCompletedMessage(payload: BankWithdrawCompletedPayload): { title: string; body: string } {
+  const cuenta = payload.clabeLast4 ? ` a tu cuenta •••${payload.clabeLast4}` : '';
+  return {
+    title: 'Tu retiro llegó',
+    body: `Enviamos $${payload.amountMxn} MXN${cuenta}.`,
+  };
+}
+
+/** Llega cuando el webhook orderUpdated marca la orden como completed. */
+export async function sendBankWithdrawCompletedNotification(
+  userId: string,
+  payload: BankWithdrawCompletedPayload,
+): Promise<boolean> {
+  return sendToUser(
+    userId,
+    buildBankWithdrawCompletedMessage(payload),
+    { type: 'bank_withdraw_completed', orderId: payload.orderId },
+    'trade_alerts',
+  );
+}
+
 export interface SignRequestNotificationPayload {
   requestId: string;
   instruction?: string;

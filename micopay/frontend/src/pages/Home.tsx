@@ -39,6 +39,7 @@ interface HomeProps {
   onNavigateCashout: () => void;
   onNavigateDeposit: () => void;
   onNavigateHistory?: () => void;
+  onNavigateBankWithdraw?: () => void;
   token: string | null;
   merchantToken: string | null;
   onNavigateInbox: () => void;
@@ -49,6 +50,7 @@ const Home = ({
   onNavigateCashout,
   onNavigateDeposit,
   onNavigateHistory,
+  onNavigateBankWithdraw,
   token,
   merchantToken,
   onNavigateInbox,
@@ -367,6 +369,18 @@ const Home = ({
             </span>
             {t('home.deposit')}
           </button>
+          {onNavigateBankWithdraw && (
+            <button
+              onClick={onNavigateBankWithdraw}
+              aria-label={t('home.bankWithdraw', { defaultValue: 'Retirar a banco' })}
+              className="w-full h-[56px] bg-papel text-tinta border-2 border-tinta shadow-solida font-bold rounded-sm active:translate-x-[2px] active:translate-y-[2px] transition-all duration-200 flex items-center justify-center gap-2 focus:outline-none focus:ring-2 focus:ring-primary"
+            >
+              <span aria-hidden="true" className="material-symbols-outlined">
+                account_balance
+              </span>
+              {t('home.bankWithdraw', { defaultValue: 'Retirar a banco' })}
+            </button>
+          )}
           <p className="text-sm text-on-surface-variant font-medium opacity-60">
             {t('home.findNearby')}
           </p>
@@ -546,11 +560,13 @@ const Home = ({
             </div>
           )}
 
-          {/* El historial completo vive en su propia pantalla. Aqui era una lista
-              sin tope que crecia para siempre, empujando hacia abajo todo lo que
-              viniera despues y haciendo la pantalla mas lenta con cada operacion.
-              Inicio es para actuar; consultar el registro es otra intencion. */}
-          {trades.length > HOME_HISTORY_LIMIT && onNavigateHistory && (
+          {/* El historial completo vive en su propia pantalla. El boton tiene
+              que aparecer siempre que haya a donde ir: en /history esta la
+              pestana "Transferencias", que no tiene nada que ver con los
+              trades listados aqui. Antes lo escondiamos cuando habia 4 o
+              menos trades, pero eso dejaba el pantalla de transferencias
+              inaccesible para usuarios nuevos. */}
+          {onNavigateHistory && (
             <button
               onClick={onNavigateHistory}
               className="mt-4 w-full min-h-12 border-2 border-tinta text-tinta font-bold rounded-sm active:translate-x-[2px] active:translate-y-[2px] transition-all"

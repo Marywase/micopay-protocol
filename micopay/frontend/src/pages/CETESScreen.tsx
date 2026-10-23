@@ -155,7 +155,8 @@ const CETESScreen = ({ onBack, onBanco, userToken, showDefi = true, showSpeiRamp
       setTxResult(result);
       setAmount('');
     } catch (err: unknown) {
-      setError(extractApiErrorPayload(err).message);
+      const payload = extractApiErrorPayload(err);
+      setError(payload.error === 'CETES_BUY_DISABLED_ON_MAINNET' ? t('cetes.buyUnavailable') : payload.message);
     } finally {
       setTxLoading(false);
     }

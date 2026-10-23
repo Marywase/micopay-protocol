@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { config } from '../config.js';
-import { UpstreamError, ValidationError } from '../utils/errors.js';
+import { AppError, UpstreamError, ValidationError } from '../utils/errors.js';
 import { getRampAssets } from '../services/etherfuse.service.js';
 import { CircuitOpenError, UpstreamTimeoutError } from '../lib/circuitBreaker.js';
 import { authMiddleware } from '../middleware/auth.middleware.js';
@@ -105,7 +105,7 @@ export async function defiRoutes(app: FastifyInstance) {
    * POST /defi/cetes/buy
    * Body: { amount: string, sourceAsset: "XLM"|"USDC"|"MXNe" }
    * On TESTNET / mockStellar: returns simulated hash.
-   * On MAINNET with real key: builds + submits pathPaymentStrictReceive tx.
+   * On MAINNET: 501 CETES_BUY_DISABLED_ON_MAINNET.
    */
   app.post('/defi/cetes/buy', {
     preHandler: [authMiddleware],
@@ -139,56 +139,14 @@ export async function defiRoutes(app: FastifyInstance) {
       };
     }
 
-    // Mainnet real path payment
-    try {
-      const { Keypair, Asset, Operation, TransactionBuilder, Networks, Horizon: HorizonModule } =
-        await import('@stellar/stellar-sdk');
-
-      const keypair = Keypair.fromSecret(config.platformSecretKey);
-      const server = new HorizonModule.Server(HORIZON_MAINNET);
-      const account = await server.loadAccount(keypair.publicKey());
-
-      const usdcIssuerMainnet = 'GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN';
-      const sendAsset =
-        sourceAsset === 'XLM'
-          ? Asset.native()
-          : new Asset(sourceAsset, sourceAsset === 'USDC' ? usdcIssuerMainnet : config.mxneIssuerAddress);
-
-      const destAsset = new Asset('CETES', config.cetesIssuer);
-      const maxSend = (parseFloat(amount) * 1.05).toFixed(7); // 5% slippage tolerance
-
-      const tx = new TransactionBuilder(account, {
-        fee: '100',
-        networkPassphrase: Networks.PUBLIC,
-      })
-        .addOperation(
-          Operation.pathPaymentStrictReceive({
-            sendAsset,
-            sendMax: maxSend,
-            destination: keypair.publicKey(),
-            destAsset,
-            destAmount: amount,
-            path: [],
-          }),
-        )
-        .setTimeout(30)
-        .build();
-
-      tx.sign(keypair);
-      const result = await server.submitTransaction(tx);
-
-      return {
-        hash: result.hash,
-        status: 'success',
-        simulated: false,
-        amount,
-        sourceAsset,
-        explorerUrl: `https://stellar.expert/explorer/public/tx/${result.hash}`,
-      };
-    } catch (err: any) {
-      request.log.error({ err: err.message, category: 'stellar.tx' }, '[defi] CETES buy failed');
-      return reply.status(500).send({ error: err.message || 'Failed to buy CETES' });
-    }
+    // Red principal: la compra todavia no esta disponible. Se responde antes
+    // de construir, firmar o enviar cualquier transaccion.
+    throw new AppError(
+      'CETES_BUY_DISABLED_ON_MAINNET',
+      'La compra de CETES todavía no está disponible.',
+      'POST /defi/cetes/buy is disabled outside testnet/mock',
+      501,
+    );
   });
 
   /**
