@@ -54,6 +54,29 @@ PRs that touch out-of-scope paths will be asked to split or rescope.
 
 ---
 
+## Working with Claude Code
+
+If you use [Claude Code](https://claude.com/claude-code), this repo ships skills in
+[`.claude/skills/`](./.claude/skills/README.md) so the assistant follows the same rules we review against:
+
+| Skill | What it does |
+|---|---|
+| `micopay-reglas` | Code rules: security, money, Stellar key, i18n, icons, commits, tests |
+| `micopay-resolver-issue` | Takes an issue to a PR: branch, code, tests, verification (`/micopay-resolver-issue 448`) |
+| `micopay-verificar` | Checks your branch before pushing and labels each failing test |
+| `stellar-dev` | General Stellar and Soroban guide |
+
+You don't need Claude to use the verifier. Run it before every PR:
+
+```bash
+.claude/skills/micopay-verificar/verify.sh
+```
+
+Full guide: [`.claude/skills/README.md`](./.claude/skills/README.md).
+Not to be confused with [`skill/SKILL.md`](./skill/SKILL.md), which describes the MicoPay API for external agents.
+
+---
+
 ## Picking an issue
 
 - Look for issues labeled [`wave:good-first`](https://github.com/Micopay/micopay-protocol/labels/wave%3Agood-first) if it is your first PR.
