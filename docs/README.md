@@ -26,6 +26,10 @@ Document purpose:
 - `DRIPS_TEAM_GUIDE.md`: explains how the team should prepare the repo, create issues, review PRs, and operate during a Drips Wave.
 - `STORE_COMPLIANCE.md`: tracks Apple and Google store requirements for crypto-adjacent financial apps.
 
+Tooling:
+
+- [`../.claude/skills/README.md`](../.claude/skills/README.md): Claude Code skills for this repo and `verify.sh`, the pre-PR check anyone can run.
+
 Why these docs exist:
 
 - Vision documents explain why MicoPay matters.
