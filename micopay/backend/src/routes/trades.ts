@@ -133,14 +133,22 @@ export async function tradeRoutes(app: FastifyInstance) {
    * GET /trades/history
    * All trades (active + completed) for the authenticated user, newest first.
    */
-  app.get('/trades/history', async (request) => {
-    const { status, page, limit } = request.query as { status?: string; page?: string; limit?: string };
-    const trades = await tradeService.getTradeHistory(
-      request.user.id,
-      status,
-      page ? parseInt(page) : 1,
-      limit ? parseInt(limit) : 20
-    );
+  app.get('/trades/history', {
+    schema: {
+      querystring: {
+        type: 'object',
+        properties: {
+          // 'all', a stored status, or the derived 'expired'. An unknown value
+          // simply matches nothing, as before.
+          status: { type: 'string', maxLength: 32 },
+          page: { type: 'integer', minimum: 1, maximum: 10000, default: 1 },
+          limit: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+        },
+      },
+    },
+  }, async (request) => {
+    const { status, page, limit } = request.query as { status?: string; page: number; limit: number };
+    const trades = await tradeService.getTradeHistory(request.user.id, status, page, limit);
     return { trades };
   });
 

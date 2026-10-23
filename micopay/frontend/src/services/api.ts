@@ -540,8 +540,13 @@ export async function getMerchantTrades(
 
 export async function getTradeHistory(
     token: string,
+    status?: string,
 ): Promise<TradeHistoryItem[]> {
-  const res = await http.get("/trades/history", authHeaders(token));
+  const res = await http.get("/trades/history", {
+    ...authHeaders(token),
+    // The server filters; 'all' (or nothing) means no filter.
+    params: status && status !== "all" ? { status } : undefined,
+  });
   return res.data.trades;
 }
 
