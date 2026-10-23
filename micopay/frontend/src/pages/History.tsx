@@ -60,9 +60,12 @@ const History = ({ onBack, onSelectTrade, token }: HistoryProps) => {
     setLoadError(null);
     setPaymentsFailed(false);
     const wantTrades = status !== 'transfers';
+    // The server owns what each tab means ("expired" is derived there), so the
+    // selected tab is sent as the status. "Todos" and "Transferencias" are not trade statuses.
+    const tradeStatus = status === 'all' || status === 'transfers' ? undefined : status;
     const wantPayments = status === 'all' || status === 'transfers';
     Promise.allSettled([
-      wantTrades ? getTradeHistory(token) : Promise.resolve([]),
+      wantTrades ? getTradeHistory(token, tradeStatus) : Promise.resolve([]),
       wantPayments ? getPaymentHistory(token) : Promise.resolve([]),
     ])
       .then(([tradesRes, paymentsRes]) => {
@@ -74,9 +77,7 @@ const History = ({ onBack, onSelectTrade, token }: HistoryProps) => {
           return;
         }
         if (paymentsRes.status === 'rejected') setPaymentsFailed(true);
-        const trades = status === 'all' || status === 'transfers'
-          ? tradesRes.value
-          : tradesRes.value.filter((t) => t.status === status);
+        const trades = tradesRes.value;
         const payments = paymentsRes.status === 'fulfilled' ? paymentsRes.value : [];
         const next: Row[] = [
           ...trades.map((trade): Row => ({ kind: 'trade', at: Date.parse(trade.created_at), trade })),

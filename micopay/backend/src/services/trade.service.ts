@@ -641,15 +641,23 @@ export async function getActiveTrades(userId: string) {
   );
 }
 
+/**
+ * Stored states of a trade that is still open. Only these can expire: a
+ * `completed`, `cancelled` or `refunded` trade is finished, whatever its
+ * `expires_at` says.
+ */
+const OPEN_TRADE_STATUSES = ['pending', 'locked', 'revealing'] as const;
+
 export async function getTradeHistory(userId: string, status?: string, page = 1, limit = 20) {
-  // 'expired' is a derived status (not stored) — computed from expires_at,
-  // same rule as before, just pushed into SQL instead of filtered client-side.
+  // 'expired' is a derived status (never stored): a trade that is still open
+  // and past its deadline. A refunded trade is not expired, it is finished.
   const conditions = ['(t.seller_id = $1 OR t.buyer_id = $1)'];
   const params: unknown[] = [userId];
 
   if (status && status !== 'all') {
     if (status === 'expired') {
-      conditions.push(`t.status NOT IN ('completed', 'cancelled') AND t.expires_at < NOW()`);
+      const open = OPEN_TRADE_STATUSES.map((s) => `'${s}'`).join(', ');
+      conditions.push(`(t.status IN (${open}) AND t.expires_at < NOW())`);
     } else {
       params.push(status);
       conditions.push(`t.status = $${params.length}`);
